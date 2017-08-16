@@ -54,10 +54,9 @@ print('loading the model...')
 model_unet = torch.nn.DataParallel(
   unet.unet(feature_scale=1, n_classes=2, is_deconv=True, in_channels=1, is_batchnorm=True).cuda())
 
-# define the loss and optimizer
-loss_bce = torch.nn.NLLLoss2d()
+# define the optimizer
 # optimizer = torch.optim.Adam(params=model_unet.parameters(), lr=1e-5)
-optimizer = torch.optim.SGD(params=model_unet.parameters(), lr=1e-4, momentum=0.9,
+optimizer = torch.optim.SGD(params=model_unet.parameters(), lr=1e-3, momentum=0.9,
                             weight_decay=0.99, nesterov=True)
 
 # train the model
@@ -67,7 +66,15 @@ for epoch in range(epochs):
     if not os.path.exists(samples_save_path):
         os.makedirs(samples_save_path)
     for idx, (inputs, targets) in enumerate(liver_dataloader):
+        # calculate class weight
+        # currently hard-coding, needs to be more generic
+        num_pixels_background = torch.numel(targets[targets == 0])
+        num_pixels_foreground = torch.numel(targets[targets == 1])
+        class_weight_background = float(num_pixels_foreground) / (num_pixels_background + num_pixels_background)
+        class_weight_foreground = 1 - class_weight_background
+        class_weight = torch.FloatTensor([class_weight_background, class_weight_foreground])
 
+        # wrap inputs and targets to variables
         inputs = Variable(inputs).cuda()
         targets = Variable(targets).cuda()
 
@@ -78,12 +85,13 @@ for epoch in range(epochs):
         # inputs = Variable(torch.randn(4, 1, 572, 572).type(torch.FloatTensor)).cuda()
         # targets = Variable(torch.LongTensor(4, 388, 388).random_(0, 1)).cuda()
 
-        # calculate sigmoid output from unet
-        # currently sigmoid layer is embedded in unet class, but it's subject to change
-        sigmoid = model_unet(inputs)
+        # calculate softmax output from unet
+        # currently softmax layer is embedded in unet class, but it's subject to change
+        softmax = model_unet(inputs)
 
         # calculate loss and update params
-        loss = loss_bce(sigmoid, targets)
+        loss_nll2d = torch.nn.NLLLoss2d(weight=class_weight)
+        loss = loss_nll2d(torch.log(softmax), targets)
         model_unet.zero_grad()
         loss.backward()
         optimizer.step()
@@ -92,14 +100,14 @@ for epoch in range(epochs):
         if (idx + 1) % 1 == 0:
             print('epoch ' + str(epoch) + ' step ' + str(idx+1) + ' loss ' + str(loss.data[0]))
         # save inputs, targets and sigmoid outputs to image
-        if (idx + 1) % 10 == 0:
+        if (idx + 1) % 50 == 0:
             torchvision.utils.save_image(inputs.data,
                                          os.path.join(samples_save_path, 'input_'+str(idx)+'.jpg'))
             torchvision.utils.save_image(torch.unsqueeze(targets.data, dim=1),
                                          os.path.join(samples_save_path, 'target_'+str(idx)+'.jpg'))
             # take second channel (label 1, i.e. foreground) only and unsqueeze to match color channel
-            torchvision.utils.save_image(torch.unsqueeze(sigmoid.data[:, 1, :, :], dim=1),
-                                         os.path.join(samples_save_path, 'sigmoid_'+str(idx)+'.jpg'))
+            torchvision.utils.save_image(torch.unsqueeze(softmax.data[:, 1, :, :], dim=1),
+                                         os.path.join(samples_save_path, 'softmax_'+str(idx)+'.jpg'))
 
 # save the model
 

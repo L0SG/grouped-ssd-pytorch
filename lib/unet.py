@@ -56,8 +56,8 @@ class unet(nn.Module):
         # final conv (without any concat)
         self.final = nn.Conv2d(filters[0], n_classes, 1)
 
-        # sigmoid
-        self.sigmoid = nn.Sigmoid()
+        # softmax
+        self.softmax = nn.Softmax2d()
 
     def forward(self, inputs):
         # forward pass of inputs
@@ -83,9 +83,9 @@ class unet(nn.Module):
         up1 = self.up_concat1(conv1, up2)
 
         final = self.final(up1)
-        sigmoid = self.sigmoid(final)
+        softmax = self.softmax(final)
 
-        return sigmoid
+        return softmax
 
 """
 class unetDown(nn.Module):
