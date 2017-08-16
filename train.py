@@ -56,7 +56,9 @@ model_unet = torch.nn.DataParallel(
 
 # define the loss and optimizer
 loss_bce = torch.nn.NLLLoss2d()
-optimizer = torch.optim.Adam(params=model_unet.parameters(), lr=1e-5)
+# optimizer = torch.optim.Adam(params=model_unet.parameters(), lr=1e-5)
+optimizer = torch.optim.SGD(params=model_unet.parameters(), lr=1e-4, momentum=0.9,
+                            weight_decay=0.99, nesterov=True)
 
 # train the model
 epochs = 1000
@@ -101,4 +103,4 @@ for epoch in range(epochs):
 
 # save the model
 
-print ('test')
+print ('testtest')
