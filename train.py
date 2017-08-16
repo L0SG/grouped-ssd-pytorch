@@ -101,4 +101,4 @@ for epoch in range(epochs):
 
 # save the model
 
-print ('testtesttest')
+print ('test')
