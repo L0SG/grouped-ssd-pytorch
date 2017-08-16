@@ -56,8 +56,9 @@ model_unet = torch.nn.DataParallel(
 
 # define the optimizer
 # optimizer = torch.optim.Adam(params=model_unet.parameters(), lr=1e-5)
-optimizer = torch.optim.SGD(params=model_unet.parameters(), lr=1e-3, momentum=0.9,
-                            weight_decay=0.99, nesterov=True)
+# same hyper params with cascaded FCN
+optimizer = torch.optim.SGD(params=model_unet.parameters(), lr=1e-3, momentum=0.8,
+                            weight_decay=0.0005, nesterov=True)
 
 # train the model
 epochs = 1000
@@ -72,7 +73,7 @@ for epoch in range(epochs):
         num_pixels_foreground = torch.numel(targets[targets == 1])
         class_weight_background = float(num_pixels_foreground) / (num_pixels_background + num_pixels_background)
         class_weight_foreground = 1 - class_weight_background
-        class_weight = torch.FloatTensor([class_weight_background, class_weight_foreground])
+        class_weight = torch.FloatTensor([class_weight_background, class_weight_foreground]).cuda()
 
         # wrap inputs and targets to variables
         inputs = Variable(inputs).cuda()
