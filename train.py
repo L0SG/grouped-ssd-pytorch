@@ -8,6 +8,11 @@ import numpy as np
 import torchvision
 import h5py
 
+# set GPU ID to use
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ['CUDA_VISIBLE_DEVICES'] = '3'
+
+# path for preprocessed data
 preprocessed_data_path = '/home/vision/tkdrlf9202/Datasets/liver_preprocessed/liver_data.h5'
 
 # check if the preprocessed dataset exists
@@ -44,7 +49,7 @@ else:
 print('constructing dataloader...')
 liver_tensor_dataset = TensorDataset(data_tensor=torch.FloatTensor(ct_flattened),
                                      target_tensor=torch.LongTensor(mask_flattened.astype(np.int64)))
-liver_dataloader = DataLoader(dataset=liver_tensor_dataset, batch_size=32,
+liver_dataloader = DataLoader(dataset=liver_tensor_dataset, batch_size=8,
                               shuffle=True, drop_last=True)
 
 
@@ -57,12 +62,14 @@ model_unet = torch.nn.DataParallel(
 # define the optimizer
 # optimizer = torch.optim.Adam(params=model_unet.parameters(), lr=1e-5)
 # same hyper params with cascaded FCN
-optimizer = torch.optim.SGD(params=model_unet.parameters(), lr=1e-3, momentum=0.8,
+optimizer = torch.optim.SGD(params=model_unet.parameters(), lr=1e-4, momentum=0.8,
                             weight_decay=0.0005, nesterov=True)
 
 # train the model
 epochs = 1000
 for epoch in range(epochs):
+    if not os.path.exists('train_samples'):
+        os.makedirs('train_samples')
     samples_save_path = os.path.join('train_samples', 'epoch_'+str(epoch))
     if not os.path.exists(samples_save_path):
         os.makedirs(samples_save_path)
