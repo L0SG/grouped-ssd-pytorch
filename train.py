@@ -13,17 +13,17 @@ import h5py
 
 # GPU ID to use
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ['CUDA_VISIBLE_DEVICES'] = '2'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '2'
 
 # hyperparameters
 learning_rate = 1e-4
 momentum = 0.8
 weight_decay = 0.0005
-batch_size = 8
+batch_size = 12
 
 # path for original & preprocessed data
-preprocessed_data_path = '/home/vision/tkdrlf9202/Datasets/liver_preprocessed/liver_data.h5'
-data_path = '/home/vision/tkdrlf9202/Datasets/liver'
+preprocessed_data_path = '/home/tkdrlf9202/Datasets/liver_preprocessed/liver_data.h5'
+data_path = '/home/tkdrlf9202/Datasets/liver'
 
 # load preprocessed dataset
 ct_flattened, mask_flattened = datahandler.load_liver_dataset(preprocessed_data_path, data_path)
@@ -111,6 +111,7 @@ for epoch in range(epochs):
             logging_data = 'epoch ' + str(epoch) + ' step ' + str(idx+1) + ' loss ' + str(running_loss)
             print(logging_data)
             logger_train.write(logging_data + '\n')
+            logger_train.flush()
             running_loss = 0.
 
         # save inputs, targets and softmax outputs to image
@@ -123,6 +124,9 @@ for epoch in range(epochs):
             torchvision.utils.save_image(torch.unsqueeze(softmax.data[:, 1, :, :], dim=1),
                                          os.path.join(samples_save_path, 'softmax_'+str(idx)+'.jpg'))
 
+    # delete unnecessary graphs to free up vram
+    del inputs, targets, softmax, loss
+
     # validation phase
     print('epoch finished, running validation phase...')
     valid_loss = 0.
@@ -134,8 +138,9 @@ for epoch in range(epochs):
         class_weight_foreground = 1 - class_weight_background
         class_weight = torch.FloatTensor([class_weight_background, class_weight_foreground]).cuda()
 
-        inputs = Variable(inputs).cuda()
-        targets = Variable(targets).cuda()
+        # use volatile flag to reduce memory usage (disable BP)
+        inputs = Variable(inputs, volatile=True).cuda()
+        targets = Variable(targets, volatile=True).cuda()
 
         targets = torch.squeeze(targets, dim=1)
 
@@ -150,7 +155,7 @@ for epoch in range(epochs):
     # print and log
     print('validation loss: ' + str(valid_loss))
     logger_valid.write('validation loss: ' + str(valid_loss) + '\n')
-
+    logger_valid.flush()
     # save the model
     torch.save(model_unet.state_dict(), os.path.join(results_path, model_param_path+'_epoch_'+str(epoch)))
     print('model saved')
