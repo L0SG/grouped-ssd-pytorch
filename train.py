@@ -54,7 +54,7 @@ optimizer = torch.optim.SGD(params=model_unet.parameters(), lr=learning_rate,
                             momentum=momentum, weight_decay=weight_decay, nesterov=True)
 
 # path for results & logs
-results_path = 'results_'+'_'+str(learning_rate)+'_'+str(momentum)+'_'+str(weight_decay)
+results_path = 'results_'+str(learning_rate)+'_'+str(momentum)+'_'+str(weight_decay)
 if not os.path.exists(results_path):
     os.makedirs(results_path)
 # make log file
