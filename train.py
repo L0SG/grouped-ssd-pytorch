@@ -13,17 +13,17 @@ import h5py
 
 # GPU ID to use
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-# os.environ['CUDA_VISIBLE_DEVICES'] = '2'
+os.environ['CUDA_VISIBLE_DEVICES'] = "3"
 
 # hyperparameters
 learning_rate = 1e-4
 momentum = 0.8
 weight_decay = 0.0005
-batch_size = 12
+batch_size = 1
 
 # path for original & preprocessed data
 preprocessed_data_path = '/home/tkdrlf9202/Datasets/liver_preprocessed/liver_data.h5'
-data_path = '/home/tkdrlf9202/Datasets/liver'
+data_path = '/media/hdd/tkdrlf9202/Datasets/liver'
 
 # load preprocessed dataset
 ct_flattened, mask_flattened = datahandler.load_liver_dataset(preprocessed_data_path, data_path)
@@ -45,7 +45,15 @@ liver_dataloader_valid = DataLoader(dataset=liver_tensor_dataset_valid, batch_si
 print('loading the model...')
 #model_unet = unet.unet(feature_scale=1, n_classes=2, is_deconv=True, in_channels=1, is_batchnorm=True).cuda()
 model_unet = torch.nn.DataParallel(
-  unet.unet(feature_scale=1, n_classes=2, is_deconv=True, in_channels=1, is_batchnorm=True).cuda())
+  unet.unet(feature_scale=0.5, n_classes=2, is_deconv=True, in_channels=1, is_batchnorm=True).cuda())
+
+# load pre-trained state if exist
+# TODO: make the routine generic
+pretrained_path = 'model_unet_parameters_final'
+if os.path.exists(os.path.join(os.getcwd(), pretrained_path)):
+    print('pretrained model detected, loading parameters...')
+    model_unet.load_state_dict(torch.load(os.path.join(os.getcwd(), pretrained_path)))
+    print('parameter loaded')
 
 # define the optimizer
 # optimizer = torch.optim.Adam(params=model_unet.parameters(), lr=1e-5)
@@ -54,7 +62,7 @@ optimizer = torch.optim.SGD(params=model_unet.parameters(), lr=learning_rate,
                             momentum=momentum, weight_decay=weight_decay, nesterov=True)
 
 # path for results & logs
-results_path = 'results_'+str(learning_rate)+'_'+str(momentum)+'_'+str(weight_decay)
+results_path = 'results_debug_'+str(learning_rate)+'_'+str(momentum)+'_'+str(weight_decay)
 if not os.path.exists(results_path):
     os.makedirs(results_path)
 # make log file
@@ -115,7 +123,7 @@ for epoch in range(epochs):
             running_loss = 0.
 
         # save inputs, targets and softmax outputs to image
-        if (idx + 1) % 50 == 0:
+        if (idx + 1) % 500 == 0:
             torchvision.utils.save_image(inputs.data,
                                          os.path.join(samples_save_path, 'input_'+str(idx)+'.jpg'))
             torchvision.utils.save_image(torch.unsqueeze(targets.data, dim=1),

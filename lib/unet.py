@@ -5,6 +5,7 @@ import torch
 # unet implementation
 # base code borrowed from https://github.com/meetshah1995/pytorch-semseg/blob/master/ptsemseg/models/unet.py
 
+
 class unet(nn.Module):
     # unet architecture class
     # uses unetDown and unetUp class for skip connections in the model
@@ -24,15 +25,8 @@ class unet(nn.Module):
 
         # filter size definition
         filters = [64, 128, 256, 512, 1024]
-        filters = [x / self.feature_scale for x in filters]
-        """
-        # downsampling
-        self.down1 = unetDown(self.in_channels, filters[0], self.is_batchnorm)
-        self.down2 = unetDown(filters[0], filters[1], self.is_batchnorm)
-        self.down3 = unetDown(filters[1], filters[2], self.is_batchnorm)
-        self.down4 = unetDown(filters[2], filters[3], self.is_batchnorm)
-        self.center = unetConv2(filters[3], filters[4], self.is_batchnorm)
-        """
+        filters = [int(x / self.feature_scale) for x in filters]
+
         self.conv1 = unetConv2(self.in_channels, filters[0], self.is_batchnorm)
         self.maxpool1 = nn.MaxPool2d(kernel_size=2)
 
@@ -87,20 +81,6 @@ class unet(nn.Module):
 
         return softmax
 
-"""
-class unetDown(nn.Module):
-    # unet downsampling class
-    # composed of conv (with batchnorm) and maxpool
-    def __init__(self, in_size, out_size, is_batchnorm):
-        super(unetDown, self).__init__()
-        self.conv = unetConv2(in_size, out_size, is_batchnorm)
-        self.down = nn.MaxPool2d(2, 2)
-
-    def forward(self, inputs):
-        outputs = self.conv(inputs)
-        outputs = self.down(outputs)
-        return outputs
-"""
 
 class unetUp(nn.Module):
     # unet upsampling class
