@@ -13,13 +13,22 @@ import h5py
 
 # GPU ID to use
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ['CUDA_VISIBLE_DEVICES'] = "3"
+#os.environ['CUDA_VISIBLE_DEVICES'] = "3"
 
+# valid set split
+test_size = 0.1
 # hyperparameters
 learning_rate = 1e-4
 momentum = 0.8
 weight_decay = 0.0005
-batch_size = 1
+batch_size = 8
+epochs = 100
+# feature scale for unet
+feature_scale = 0.5
+n_classes = 2
+# non-model switches
+save_image_interval = 500
+show_step_interval = 10
 
 # path for original & preprocessed data
 preprocessed_data_path = '/home/tkdrlf9202/Datasets/liver_preprocessed/liver_data.h5'
@@ -27,7 +36,7 @@ data_path = '/media/hdd/tkdrlf9202/Datasets/liver'
 
 # load preprocessed dataset
 ct_flattened, mask_flattened = datahandler.load_liver_dataset(preprocessed_data_path, data_path)
-ct_train, ct_valid, mask_train, mask_valid = train_test_split(ct_flattened, mask_flattened, test_size=0.1)
+ct_train, ct_valid, mask_train, mask_valid = train_test_split(ct_flattened, mask_flattened, test_size=test_size)
 
 # wrap the data to pytorch tensordataset and construct dataloader
 print('constructing dataloader...')
@@ -45,7 +54,7 @@ liver_dataloader_valid = DataLoader(dataset=liver_tensor_dataset_valid, batch_si
 print('loading the model...')
 #model_unet = unet.unet(feature_scale=1, n_classes=2, is_deconv=True, in_channels=1, is_batchnorm=True).cuda()
 model_unet = torch.nn.DataParallel(
-  unet.unet(feature_scale=0.5, n_classes=2, is_deconv=True, in_channels=1, is_batchnorm=True).cuda())
+  unet.unet(feature_scale=feature_scale, n_classes=n_classes, is_deconv=True, in_channels=1, is_batchnorm=True).cuda())
 
 # load pre-trained state if exist
 # TODO: make the routine generic
@@ -62,7 +71,7 @@ optimizer = torch.optim.SGD(params=model_unet.parameters(), lr=learning_rate,
                             momentum=momentum, weight_decay=weight_decay, nesterov=True)
 
 # path for results & logs
-results_path = 'results_debug_'+str(learning_rate)+'_'+str(momentum)+'_'+str(weight_decay)
+results_path = 'results_p36test_'+str(learning_rate)+'_'+str(momentum)+'_'+str(weight_decay)
 if not os.path.exists(results_path):
     os.makedirs(results_path)
 # make log file
@@ -72,7 +81,6 @@ logger_valid = open(os.path.join(results_path, 'valid_log.txt'), 'w')
 model_param_path = 'model_unet_parameters'
 
 # train and validate the model
-epochs = 100
 for epoch in range(epochs):
     samples_save_path = os.path.join(results_path, 'epoch_'+str(epoch))
     if not os.path.exists(samples_save_path):
@@ -114,7 +122,7 @@ for epoch in range(epochs):
         running_loss += loss.data[0]
 
         # print current epoch, step and avg.loss ; then save to logger
-        if (idx + 1) % 10 == 0:
+        if (idx + 1) % show_step_interval == 0:
             running_loss /= 10
             logging_data = 'epoch ' + str(epoch) + ' step ' + str(idx+1) + ' loss ' + str(running_loss)
             print(logging_data)
@@ -123,7 +131,7 @@ for epoch in range(epochs):
             running_loss = 0.
 
         # save inputs, targets and softmax outputs to image
-        if (idx + 1) % 500 == 0:
+        if (idx + 1) % save_image_interval == 0:
             torchvision.utils.save_image(inputs.data,
                                          os.path.join(samples_save_path, 'input_'+str(idx)+'.jpg'))
             torchvision.utils.save_image(torch.unsqueeze(targets.data, dim=1),

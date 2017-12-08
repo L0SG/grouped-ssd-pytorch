@@ -1,9 +1,8 @@
-from utils import preprocess_liver_dataset
-from utils import load_liver_seg_dataset
+from lib.utils import preprocess_liver_dataset
+from lib.utils import load_liver_seg_dataset
 import os
 import h5py
 import numpy as np
-
 
 def load_liver_dataset(preprocessed_data_path, data_path):
     """

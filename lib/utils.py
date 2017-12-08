@@ -20,9 +20,9 @@ def read_dicom_series(directory, filepattern="P_*"):
 
     if not os.path.exists(directory) or not os.path.isdir(directory):
         raise ValueError("Given directory does not exist or is a file : " + str(directory))
-    print '\tRead Dicom', directory
+    print('\tRead Dicom', directory)
     lstFilesDCM = natsort.natsorted(glob.glob(os.path.join(directory, filepattern)))
-    print '\tLength dicom series', len(lstFilesDCM)
+    print('\tLength dicom series', len(lstFilesDCM))
     # Get ref file
     RefDs = dicom.read_file(lstFilesDCM[0])
     # Load dimensions based on the number of rows, columns, and slices (along the Z axis)

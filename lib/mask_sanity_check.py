@@ -1,4 +1,4 @@
-from lib import utils
+import utils
 # this code is for checking data sanity of mask data
 # debug purpose only
 print('reading dicom and mask data...')

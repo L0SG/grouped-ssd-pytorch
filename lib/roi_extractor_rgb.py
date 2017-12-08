@@ -11,6 +11,7 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from PIL import Image
+import cPickle
 
 roi_image_path = '/media/hdd/tkdrlf9202/Datasets/liver_lesion/roi_image'
 roi_coordinate_path = '/media/hdd/tkdrlf9202/Datasets/liver_lesion/roi_coordinate'
@@ -18,12 +19,12 @@ roi_coordinate_path = '/media/hdd/tkdrlf9202/Datasets/liver_lesion/roi_coordinat
 # specify rgb value of roi lines
 # yellow have 2-pixel thick line, red have 1-pixel line
 rgb_value_yellow = (255, 255, 0)
-rgb_value_red = (253, 0, 0)
+rgb_value_red = (255, 0, 0)
 
 # traverse over subjects
 for subject in glob.glob(os.path.join(roi_image_path, '*')):
-    # A86 have red roi
-    #if os.path.basename(os.path.normpath(subject)) != 'A25':
+    # debug: A86 have red roi
+    #if os.path.basename(os.path.normpath(subject)) != 'A86':
     #    continue
     basename_subject = os.path.basename(os.path.normpath(subject))
     path_subject = os.path.join(roi_coordinate_path, basename_subject)
@@ -46,6 +47,7 @@ for subject in glob.glob(os.path.join(roi_image_path, '*')):
             index_red = np.where(np.all(roi_image_tensor == rgb_value_red, axis=-1))
             # either one of the index list should be empty
             assert not(len(index_yellow[0]) != 0 and len(index_red[0]) != 0)
+            assert not (len(index_yellow[0]) == 0 and len(index_red[0]) == 0)
             # yellow case
             if len(index_yellow[0]) != 0:
                 x_start = index_yellow[1][0]
@@ -68,10 +70,10 @@ for subject in glob.glob(os.path.join(roi_image_path, '*')):
             coordinate = [x_start, y_start, x_delta, y_delta]
             # write coordinate to text file
             suffix = slice[-8:-4]
-            """
+
             path_slice = os.path.join(path_phase, str(basename_phase)+'_'+str(suffix)+'.txt')
             output_coordinate = open(path_slice, 'w+')
-            output_coordinate.write(str(coordinate))
+            cPickle.dump(coordinate, output_coordinate)
             output_coordinate.close()
             """
             # debug: draw extracted bounding box and save to image
@@ -82,6 +84,6 @@ for subject in glob.glob(os.path.join(roi_image_path, '*')):
             ax.add_patch(rect)
             plt.savefig(os.path.join(path_phase, str(basename_phase)+'_'+str(suffix)+'.png'))
             plt.close()
-
+            """
     print('subject ' + str(os.path.basename(os.path.normpath(subject))) +
-          ' passed: [x_start, x_delta, y_start, y_delta] of last slice = ' + str(coordinate))
+          ' passed: [x_start, y_start, x_delta, y_delta] of last slice = ' + str(coordinate))
