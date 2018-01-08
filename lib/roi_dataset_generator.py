@@ -86,7 +86,7 @@ def generate_roi_dataset(ct_path, roi_coordinate_path):
     return ct_data, coordinate_data
 
 # generate roi dataset
-# each ct image slice have 1 or more (n) bounding boxes [n, x_start, y_start, x_delta, y_delta]
+# each ct image slice have 1 or more (n) bounding boxes [n, y_start, x_start, y_delta, x_delta]
 # if using P phase only, input ct should be [n, 1, 512, 512] (1 is greyscale)
 
 ct_path = '/media/hdd/tkdrlf9202/Datasets/liver_lesion/ct'
@@ -99,7 +99,7 @@ CT_IMAGE_SIZE = (512, 512)
 ct_data, coordinate_data = generate_roi_dataset(ct_path, roi_coordinate_path)
 
 """
-# convert [x_start, y_start, x_delta, y_delta] to [center_x, center_y, height, width]
+# convert [y_start, x_start, y_delta, x_delta] to [center_x, center_y, height, width]
 # the latter format is used for SSD application
 for idx in range(len(coordinate_data)):
     x_start, y_start, x_delta, y_delta = coordinate_data[idx]
@@ -111,9 +111,9 @@ for idx in range(len(coordinate_data)):
 """
 
 # the above is WRONG: it uses [x_min, y_min, x_max, y_max]
-# convert [x_start, y_start, x_delta, y_delta] to [x_min, y_min, x_max, y_max]
+# convert [y_start, x_start, y_delta, x_delta] to [x_min, y_min, x_max, y_max]
 for idx in range(len(coordinate_data)):
-    x_start, y_start, x_delta, y_delta = coordinate_data[idx]
+    y_start, x_start, y_delta, x_delta = coordinate_data[idx]
     x_min, y_min = x_start, y_start
     x_max, y_max = x_start + x_delta, y_start + y_delta
     coordinate_data[idx] = np.array([x_min, y_min, x_max, y_max])

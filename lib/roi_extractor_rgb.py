@@ -67,7 +67,7 @@ for subject in glob.glob(os.path.join(roi_image_path, '*')):
             # delta must be positive
             assert x_delta > 0 and y_delta > 0
 
-            coordinate = [x_start, y_start, x_delta, y_delta]
+            coordinate = [y_start, x_start, y_delta, x_delta]
             # write coordinate to text file
             suffix = slice[-8:-4]
 
@@ -86,4 +86,4 @@ for subject in glob.glob(os.path.join(roi_image_path, '*')):
             plt.close()
             """
     print('subject ' + str(os.path.basename(os.path.normpath(subject))) +
-          ' passed: [x_start, y_start, x_delta, y_delta] of last slice = ' + str(coordinate))
+          ' passed: [y_start, x_start, y_delta, x_delta] of last slice = ' + str(coordinate))

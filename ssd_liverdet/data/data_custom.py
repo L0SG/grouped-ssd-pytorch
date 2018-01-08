@@ -104,6 +104,7 @@ class FISHdetection(data.Dataset):
             np.expand_dims(target, 0)
             # scale each coord from absolute pixels to 0~1
             for idx in range(target.shape[0]):
+                """
                 x_center, y_center, h, w, cls = target[idx]
                 x_center /= height
                 y_center /= width
@@ -111,7 +112,11 @@ class FISHdetection(data.Dataset):
                 w /= width
                 # WARNING: SSDAugmentation uses y_center as first elem, change it properly
                 target[idx] = np.array([y_center, x_center, w, h, cls])
-
+                """
+                x_min, y_min, x_max, y_max, cls = target[idx]
+                x_min, x_max = x_min/width, x_max/width
+                y_min, y_max = y_min/height, y_max/height
+                target[idx] = np.array([x_min, y_min, x_max, y_max, cls])
             img, boxes, labels = self.transform(img, target[:, :4], target[:, 4])
             # to rgb
             img = img[:, :, (2, 1, 0)]
@@ -134,7 +139,9 @@ class FISHdetection(data.Dataset):
         # img_id = self.ids[index]
         img_path = self.image_paths[index]
 
-        return cv2.imread(img_path, cv2.IMREAD_COLOR)
+        # ct data is already numpy
+        #return cv2.imread(img_path, cv2.IMREAD_COLOR)
+        return img_path
 
     def pull_anno(self, index):
         '''Returns the original annotation of image at index
@@ -151,11 +158,12 @@ class FISHdetection(data.Dataset):
         # img_id = self.ids[index]
         # anno = ET.parse(self._annopath % img_id).getroot()
         # gt = self.target_transform(anno, 1, 1)
-        img_path = self.image_paths[index]
+        #img_path = self.image_paths[index]
         # target = ET.parse(self._annopath % img_id).getroot()
         target = self.image_annots[index]
 
-        return img_path, target
+        #return img_path, target
+        return target
 
     def pull_tensor(self, index):
         '''Returns the original image at an index in tensor form
