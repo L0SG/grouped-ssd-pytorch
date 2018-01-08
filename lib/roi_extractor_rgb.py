@@ -11,7 +11,7 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from PIL import Image
-import cPickle
+import pickle
 
 roi_image_path = '/media/hdd/tkdrlf9202/Datasets/liver_lesion/roi_image'
 roi_coordinate_path = '/media/hdd/tkdrlf9202/Datasets/liver_lesion/roi_coordinate'
@@ -72,8 +72,8 @@ for subject in glob.glob(os.path.join(roi_image_path, '*')):
             suffix = slice[-8:-4]
 
             path_slice = os.path.join(path_phase, str(basename_phase)+'_'+str(suffix)+'.txt')
-            output_coordinate = open(path_slice, 'w+')
-            cPickle.dump(coordinate, output_coordinate)
+            output_coordinate = open(path_slice, 'wb+')
+            pickle.dump(coordinate, output_coordinate)
             output_coordinate.close()
             """
             # debug: draw extracted bounding box and save to image

@@ -3,7 +3,7 @@ import glob
 import os
 from PIL import Image
 import dicom
-import cPickle
+import pickle
 import h5py
 
 def preprocess_img_slc_for_detection(img_slc):
@@ -70,14 +70,14 @@ def generate_roi_dataset(ct_path, roi_coordinate_path):
             assert len(path_slices_filtered) == len(path_coordinates_filtered)
 
             # load matching ct file and coordinate, then append to master list
-            for idx in xrange(len(path_slices_filtered)):
+            for idx in range(len(path_slices_filtered)):
                 ct_file = dicom.read_file(os.path.join(ct_path, basename_subject, basename_phase,
                                                         path_slices_filtered[idx]))
                 ct_image = ct_file.pixel_array
                 ct_image_preprocessed = preprocess_img_slc_for_detection(ct_image)
                 coordinate_file = open(os.path.join(roi_coordinate_path, basename_subject, basename_phase,
-                                                        path_coordinates_filtered[idx]), 'r')
-                coordinate = cPickle.load(coordinate_file)
+                                                        path_coordinates_filtered[idx]), 'rb')
+                coordinate = pickle.load(coordinate_file)
                 ct_data.append(ct_image_preprocessed)
                 coordinate_data.append(coordinate)
 
@@ -97,6 +97,27 @@ CT_IMAGE_SIZE = (512, 512)
 
 
 ct_data, coordinate_data = generate_roi_dataset(ct_path, roi_coordinate_path)
+
+"""
+# convert [x_start, y_start, x_delta, y_delta] to [center_x, center_y, height, width]
+# the latter format is used for SSD application
+for idx in range(len(coordinate_data)):
+    x_start, y_start, x_delta, y_delta = coordinate_data[idx]
+    center_x = int((x_start + (x_start + x_delta)) / 2)
+    center_y = int((y_start + (y_start + y_delta)) / 2)
+    height = x_delta
+    width = y_delta
+    coordinate_data[idx] = np.array([center_x, center_y, height, width])
+"""
+
+# the above is WRONG: it uses [x_min, y_min, x_max, y_max]
+# convert [x_start, y_start, x_delta, y_delta] to [x_min, y_min, x_max, y_max]
+for idx in range(len(coordinate_data)):
+    x_start, y_start, x_delta, y_delta = coordinate_data[idx]
+    x_min, y_min = x_start, y_start
+    x_max, y_max = x_start + x_delta, y_start + y_delta
+    coordinate_data[idx] = np.array([x_min, y_min, x_max, y_max])
+
 print(np.array(ct_data).shape, np.array(coordinate_data).shape)
 # save the dataset as python list type
 # is converting to numpy type better?
