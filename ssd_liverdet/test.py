@@ -21,7 +21,7 @@ import matplotlib.patches as patches
 from PIL import Image
 
 parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
-parser.add_argument('--trained_model', default='/home/tkdrlf9202/PycharmProjects/Liver_segmentation/ssd_liverdet/weights/ssd300_0712_5000.pth',
+parser.add_argument('--trained_model', default='/home/tkdrlf9202/PycharmProjects/Liver_segmentation/ssd_liverdet/weights/ssd300_0712_15000.pth',
                     type=str, help='Trained state_dict file path to open')
 parser.add_argument('--save_folder', default='eval/', type=str,
                     help='Dir to save results')
@@ -78,12 +78,12 @@ def test_net(save_folder, net, cuda, testset, transform, thresh):
                 j += 1
 
         # calculate gt & pred bbox coords
-        # (y, x) start & delta of ground truth
-        ys_gt, xs_gt = annotation[0][0], annotation[0][1]
-        yd_gt, xd_gt = annotation[0][2] - ys_gt, annotation[0][3] - xs_gt
+        # (x, y) start & delta of ground truth
+        xs_gt, ys_gt = annotation[0][0], annotation[0][1]
+        xd_gt, yd_gt = annotation[0][2] - xs_gt, annotation[0][3] - ys_gt
         # (y, x) start & delta of prediction
-        ys_p, xs_p = int(coords[1]), int(coords[0])
-        yd_p, xd_p = int(coords[3]) - ys_p, int(coords[2]) - xs_p
+        xs_p, ys_p = int(coords[0]), int(coords[1])
+        xd_p, yd_p = int(coords[2]) - xs_p, int(coords[3]) - ys_p
 
         # visualization: draw gt & predicted bounding box and save to image
         output_image = img.copy()
@@ -136,22 +136,16 @@ if __name__ == '__main__':
 
 
     ct, coord = load_lesion_dataset(datapath)
-    # ct: [len_data, 512, 512]
-    # since base network receives rgb image, just make 2 more channels and fill the values in
-    # this is temporary: using upper and lower slice instead will be better
-    # make 0~155 uint8 image
-    ct_rgb = np.zeros((ct.shape[0], 512, 512, 3), dtype=np.uint8)
-    for idx in range(ct.shape[0]):
-        ct_img = ct[idx]
-        ct_rgb[idx, ..., 0] = ct_img * 255
-        ct_rgb[idx, ..., 1] = ct_img * 255
-        ct_rgb[idx, ..., 2] = ct_img * 255
+    # ct: [len_data, 3, 512, 512] (3 continous slides)
+    # make channels last & 0~255 uint8 image
+    ct = np.transpose(ct * 255, [0, 2, 3, 1]).astype(dtype=np.uint8)
 
-    # coord: [len_data, 4] => should extend to 5 (include label)
+    # coord: [len_data, 3, 4] => should extend to 5 (include label)
     # all coords are lesion: add class label "1"
     coord_with_label = np.zeros((coord.shape[0], 5))
     for idx in range(coord.shape[0]):
-        crd = coord[idx]
+        # each channels have different gt => since they are nearly same, just use the middle gt as main target
+        crd = coord[idx][1]
         # add zero as class index: it is treated to 1 by adding +1 to that
         # loss function automatically defines another zero as background
         # https://github.com/amdegroot/ssd.pytorch/issues/17
@@ -164,7 +158,7 @@ if __name__ == '__main__':
         cudnn.benchmark = True
     # evaluation
     means = (34, 34, 34)
-    testset = FISHdetection(ct_rgb, coord_with_label, None, 'fish_detection')
+    testset = FISHdetection(ct, coord_with_label, None, 'fish_detection')
     test_net(args.save_folder, net, args.cuda, testset,
              BaseTransform(net.size, means),
              thresh=args.visual_threshold)

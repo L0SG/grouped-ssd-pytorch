@@ -64,12 +64,14 @@ def generate_roi_dataset(ct_path, roi_coordinate_path):
             path_coordinates_basename = [name[:-4] for name in path_coordinates]
 
             # obtain intersection (data that have both image & coordinate)
-            intersection = set(path_slices_basename).intersection(path_coordinates_basename)
+            intersection = sorted(set(path_slices_basename).intersection(path_coordinates_basename))
             path_slices_filtered = [name + str('.DCM') for name in list(intersection)]
             path_coordinates_filtered = [name + str('.txt') for name in list(intersection)]
             assert len(path_slices_filtered) == len(path_coordinates_filtered)
 
-            # load matching ct file and coordinate, then append to master list
+            # load matching ct file and coordinate, then append to temporary list
+            ct_data_oneslice = []
+            coordinate_oneslice = []
             for idx in range(len(path_slices_filtered)):
                 ct_file = dicom.read_file(os.path.join(ct_path, basename_subject, basename_phase,
                                                         path_slices_filtered[idx]))
@@ -78,11 +80,19 @@ def generate_roi_dataset(ct_path, roi_coordinate_path):
                 coordinate_file = open(os.path.join(roi_coordinate_path, basename_subject, basename_phase,
                                                         path_coordinates_filtered[idx]), 'rb')
                 coordinate = pickle.load(coordinate_file)
-                ct_data.append(ct_image_preprocessed)
-                coordinate_data.append(coordinate)
+                ct_data_oneslice.append(ct_image_preprocessed)
+                coordinate_oneslice.append(coordinate)
+        assert len(ct_data_oneslice) == len(coordinate_oneslice)
+        # make 3 continuous slides as a single data point to enable the CNN to recognize vertical info
+        # consider 3 slides to additional channel (like RGB)
+        for idx_slice in range(len(ct_data_oneslice) - 2):
+            ct_data_threeslices = np.array(ct_data_oneslice[idx_slice:idx_slice+3])
+            coordinate_threeslices = np.array(coordinate_oneslice[idx_slice:idx_slice+3])
+            # append to master list
+            ct_data.append(ct_data_threeslices)
+            coordinate_data.append(coordinate_threeslices)
 
     assert len(ct_data) == len(coordinate_data)
-
     return ct_data, coordinate_data
 
 # generate roi dataset
@@ -113,10 +123,11 @@ for idx in range(len(coordinate_data)):
 # the above is WRONG: it uses [x_min, y_min, x_max, y_max]
 # convert [y_start, x_start, y_delta, x_delta] to [x_min, y_min, x_max, y_max]
 for idx in range(len(coordinate_data)):
-    y_start, x_start, y_delta, x_delta = coordinate_data[idx]
-    x_min, y_min = x_start, y_start
-    x_max, y_max = x_start + x_delta, y_start + y_delta
-    coordinate_data[idx] = np.array([x_min, y_min, x_max, y_max])
+    for idx_slice in range(coordinate_data[idx].shape[0]):
+        y_start, x_start, y_delta, x_delta = coordinate_data[idx][idx_slice]
+        x_min, y_min = x_start, y_start
+        x_max, y_max = x_start + x_delta, y_start + y_delta
+        coordinate_data[idx][idx_slice] = np.array([x_min, y_min, x_max, y_max])
 
 print(np.array(ct_data).shape, np.array(coordinate_data).shape)
 # save the dataset as python list type

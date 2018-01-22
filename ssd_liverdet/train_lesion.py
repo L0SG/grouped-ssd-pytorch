@@ -15,6 +15,7 @@ from ssd import build_ssd
 import numpy as np
 import time
 import h5py
+from sklearn.model_selection import train_test_split
 
 def str2bool(v):
     return v.lower() in ("yes", "true", "t", "1")
@@ -98,27 +99,24 @@ def load_lesion_dataset(data_path):
     return ct_flattened, coordinate_flattened
 
 ct, coord = load_lesion_dataset(datapath)
-# ct: [len_data, 512, 512]
-# since base network receives rgb image, just make 2 more channels and fill the values in
-# this is temporary: using upper and lower slice instead will be better
-# make 0~155 uint8 image
-ct_rgb = np.zeros((ct.shape[0], 512, 512, 3), dtype=np.uint8)
-for idx in range(ct.shape[0]):
-    ct_img = ct[idx]
-    ct_rgb[idx, ..., 0] = ct_img * 255
-    ct_rgb[idx, ..., 1] = ct_img * 255
-    ct_rgb[idx, ..., 2] = ct_img * 255
+# ct: [len_data, 3, 512, 512] (3 continous slides)
+# make channels last & 0~255 uint8 image
+ct = np.transpose(ct * 255, [0, 2, 3, 1]).astype(dtype=np.uint8)
 
-# coord: [len_data, 4] => should extend to 5 (include label)
+# coord: [len_data, 3, 4] => should extend to 5 (include label)
 # all coords are lesion: add class label "1"
-coord_with_label = np.zeros((coord.shape[0], 5))
+coord_ssd = np.zeros((coord.shape[0], 5))
 for idx in range(coord.shape[0]):
-    crd = coord[idx]
+    # each channels have different gt => since they are nearly same, just use the middle gt as main target
+    crd = coord[idx][1]
     # add zero as class index: it is treated to 1 by adding +1 to that
     # loss function automatically defines another zero as background
     # https://github.com/amdegroot/ssd.pytorch/issues/17
     crd = np.append(crd, [0])
-    coord_with_label[idx] = crd
+    coord_ssd[idx] = crd
+
+# split train & valid set: subject-level (without shuffle)
+ct_train, ct_valid, coord_ssd_train, coord_ssd_valid = train_test_split(ct, coord_ssd, test_size=0.1, shuffle=False)
 """#########################################################"""
 
 """#################### Network Definition ####################"""
@@ -165,19 +163,23 @@ criterion = MultiBoxLoss(num_classes, 0.5, True, 0, True, 3, 0.5, False, args.cu
 
 
 def train():
-    net.train()
     # loss counters
     loc_loss = 0  # epoch
     conf_loss = 0
     epoch = 0
     print('Loading Dataset...')
-    dataset = FISHdetection(ct_rgb, coord_with_label, SSDAugmentation(ssd_dim, means), dataset_name='liver_lesion')
-    #    dataset = VOCDetection(args.voc_root, train_sets, SSDAugmentation(
+    dataset_train = FISHdetection(ct_train, coord_ssd_train,
+                                  SSDAugmentation(ssd_dim, means), dataset_name='liver_lesion_train')
+    dataset_valid = FISHdetection(ct_valid, coord_ssd_valid,
+                                  SSDAugmentation(ssd_dim, means), dataset_name='liver_detection_valid')
+    #    dataset_train = VOCDetection(args.voc_root, train_sets, SSDAugmentation(
 #        ssd_dim, means), AnnotationTransform())
 
-    epoch_size = len(dataset) // args.batch_size
-    print('Training SSD on', dataset.name)
+    epoch_size = len(dataset_train) // args.batch_size
+    print('Training SSD on', dataset_train.name)
     step_index = 0
+
+    # visdom plot
     if args.visdom:
         # initialize visdom loss plot
         lot = viz.line(
@@ -187,6 +189,16 @@ def train():
                 xlabel='Iteration',
                 ylabel='Loss',
                 title='Current SSD_Liver Training Loss',
+                legend=['Loc Loss', 'Conf Loss', 'Loss']
+            )
+        )
+        valid_lot = viz.line(
+            X=torch.zeros((1,)).cpu(),
+            Y=torch.zeros((1, 3)).cpu(),
+            opts=dict(
+                xlabel='Iteration',
+                ylabel='Loss',
+                title='SSD_Liver Validation Loss',
                 legend=['Loc Loss', 'Conf Loss', 'Loss']
             )
         )
@@ -200,13 +212,18 @@ def train():
                 legend=['Loc Loss', 'Conf Loss', 'Loss']
             )
         )
+
     batch_iterator = None
-    data_loader = data.DataLoader(dataset, batch_size, num_workers=args.num_workers,
+    data_loader_train = data.DataLoader(dataset_train, batch_size, num_workers=args.num_workers,
                                   shuffle=True, collate_fn=detection_collate, pin_memory=True)
+    data_loader_valid = data.DataLoader(dataset_valid, batch_size, num_workers=args.num_workers,
+                                        shuffle=True, collate_fn=detection_collate, pin_memory=True)
+
     for iteration in range(args.start_iter, max_iter):
+        net.train()
         if (not batch_iterator) or (iteration % epoch_size == 0):
             # create batch iterator
-            batch_iterator = iter(data_loader)
+            batch_iterator = iter(data_loader_train)
         if iteration in stepvalues:
             step_index += 1
             adjust_learning_rate(optimizer, args.gamma, step_index)
@@ -218,6 +235,7 @@ def train():
                     win=epoch_lot,
                     update='append'
                 )
+
             # reset epoch loss counters
             loc_loss = 0
             conf_loss = 0
@@ -232,9 +250,11 @@ def train():
         else:
             images = Variable(images)
             targets = [Variable(anno, volatile=True) for anno in targets]
+
         # forward
         t0 = time.time()
         out = net(images)
+
         # backprop
         optimizer.zero_grad()
         loss_l, loss_c = criterion(out, targets)
@@ -244,12 +264,48 @@ def train():
         t1 = time.time()
         loc_loss += loss_l.data[0]
         conf_loss += loss_c.data[0]
+
+        # train log
         if iteration % 10 == 0:
             print('Timer: %.4f sec.' % (t1 - t0))
             print('iter ' + repr(iteration) + ' || Loss: %.4f ||' % (loss.data[0]), end=' ')
             if args.visdom and args.send_images_to_visdom:
                 random_batch_index = np.random.randint(images.size(0))
                 viz.image(images.data[random_batch_index].cpu().numpy())
+
+        # validation phase for each several train iter
+        if iteration % 100 == 0:
+            net.eval()
+            loss_l_val, loss_c_val, loss_val = 0., 0., 0.
+            batch_iterator_val = iter(data_loader_valid)
+            for idx in range(len(batch_iterator_val)):
+                img_val, tar_val = next(batch_iterator_val)
+                if args.cuda:
+                    img_val = Variable(img_val.cuda())
+                    tar_val = [Variable(anno.cuda(), volatile=True) for anno in tar_val]
+                else:
+                    img_val = Variable(img_val)
+                    tar_val = [Variable(anno, volatile=True) for anno in tar_val]
+
+                out_val = net(img_val)
+                loss_l_val_step, loss_c_val_step = criterion(out_val, tar_val)
+                loss_val_step = loss_l_val_step + loss_c_val_step
+                loss_l_val += loss_l_val_step
+                loss_c_val += loss_c_val_step
+                loss_val += loss_val_step
+            loss_l_val, loss_c_val, loss_val = loss_l_val/(idx+1), loss_c_val/(idx+1), loss_val/(idx+1)
+            print('\n')
+            print('VALID: iter ' + repr(iteration) + ' || Loss: %.4f ||' % (loss_val.data[0]), end='\n')
+            if args.visdom:
+                viz.line(
+                    X=torch.ones((1, 3)).cpu() * iteration,
+                    Y=torch.Tensor([loss_l_val.data[0], loss_c_val.data[0],
+                                    loss_l_val.data[0] + loss_c_val.data[0]]).unsqueeze(0).cpu(),
+                    win=valid_lot,
+                    update='append'
+                )
+
+        # visdom train plot
         if args.visdom:
             viz.line(
                 X=torch.ones((1, 3)).cpu() * iteration,
@@ -267,6 +323,8 @@ def train():
                     win=epoch_lot,
                     update=True
                 )
+
+        # save checkpoint
         if iteration % 5000 == 0:
             print('Saving state, iter:', iteration)
             torch.save(ssd_net.state_dict(), 'weights/ssd300_0712_' +
