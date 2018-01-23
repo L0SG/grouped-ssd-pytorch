@@ -91,11 +91,14 @@ class ToAbsoluteCoords(object):
 
 
 class PixelJitter(object):
+    def __init__(self, percentage):
+        self.percentage = percentage
+
     def __call__(self, image, boxes=None, labels=None):
         # add pixel jitter for targets for data augmentation
         # it applies random pixel shift (up to 1%) for each element of [x_min, y_min, x_max, y_max] & keep label info
         height, width, channels = image.shape
-        label_noise = np.random.uniform(-0.01, 0.01, size=4).astype(np.float32)
+        label_noise = np.random.uniform(-self.percentage, self.percentage, size=4).astype(np.float32)
         label_noise[0] *= width
         label_noise[1] *= height
         label_noise[2] *= width
@@ -421,14 +424,14 @@ class SSDAugmentation(object):
             ConvertFromInts(),
             ToAbsoluteCoords(),
             # new augmentation: pixel jitter
-            PixelJitter(),
+            PixelJitter(0.02),
             PhotometricDistort(),
             Expand(self.mean),
             # TODO: consider these augmentations for CT
             # cropping seems to be not good for CT
-            # RandomSampleCrop(),
+            RandomSampleCrop(),
             # mirroring is not correct method for CT
-            # RandomMirror(),
+            RandomMirror(),
             ToPercentCoords(),
             Resize(self.size),
             SubtractMeans(self.mean)
