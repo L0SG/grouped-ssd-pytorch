@@ -90,6 +90,22 @@ class ToAbsoluteCoords(object):
         return image, boxes, labels
 
 
+class PixelJitter(object):
+    def __call__(self, image, boxes=None, labels=None):
+        # add pixel jitter for targets for data augmentation
+        # it applies random pixel shift (up to 1%) for each element of [x_min, y_min, x_max, y_max] & keep label info
+        height, width, channels = image.shape
+        label_noise = np.random.uniform(-0.01, 0.01, size=4).astype(np.float32)
+        label_noise[0] *= width
+        label_noise[1] *= height
+        label_noise[2] *= width
+        label_noise[3] *= height
+        label_noise = label_noise.astype(np.int8).astype(np.float64)
+        boxes = np.add(boxes, label_noise)
+
+        return image, boxes, labels
+
+
 class ToPercentCoords(object):
     def __call__(self, image, boxes=None, labels=None):
         height, width, channels = image.shape
@@ -404,6 +420,8 @@ class SSDAugmentation(object):
         self.augment = Compose([
             ConvertFromInts(),
             ToAbsoluteCoords(),
+            # new augmentation: pixel jitter
+            PixelJitter(),
             PhotometricDistort(),
             Expand(self.mean),
             # TODO: consider these augmentations for CT

@@ -24,13 +24,13 @@ parser = argparse.ArgumentParser(description='Single Shot MultiBox Detector Trai
 parser.add_argument('--version', default='v2', help='conv11_2(v2) or pool6(v1) as last layer')
 parser.add_argument('--basenet', default='vgg16_reducedfc.pth', help='pretrained base model')
 parser.add_argument('--jaccard_threshold', default=0.5, type=float, help='Min Jaccard index for matching')
-parser.add_argument('--batch_size', default=64, type=int, help='Batch size for training')
+parser.add_argument('--batch_size', default=32, type=int, help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str, help='Resume from checkpoint')
 parser.add_argument('--num_workers', default=2, type=int, help='Number of workers used in dataloading')
 parser.add_argument('--iterations', default=120000, type=int, help='Number of training iterations')
 parser.add_argument('--start_iter', default=0, type=int, help='Begin counting iterations starting from this value (should be used with resume)')
 parser.add_argument('--cuda', default=True, type=str2bool, help='Use cuda to train model')
-parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float, help='initial learning rate')
+parser.add_argument('--lr', '--learning-rate', default=1e-5, type=float, help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
 parser.add_argument('--weight_decay', default=5e-4, type=float, help='Weight decay for SGD')
 parser.add_argument('--gamma', default=0.1, type=float, help='Gamma update for SGD')
@@ -65,6 +65,9 @@ weight_decay = 0.0005
 stepvalues = (80000, 100000, 120000)
 gamma = 0.1
 momentum = 0.9
+
+# data augmentation hyperparams
+gt_pixel_jitter = 0.01
 """#########################################################"""
 
 
@@ -243,6 +246,15 @@ def train():
 
         # load train data
         images, targets = next(batch_iterator)
+        """
+        # percentage jitter seems to cause bug, implemented with absolute pixel instead in augmentation.py
+        # add pixel jitter for targets for data augmentation
+        # it applies random pixel shift (up to 1%) for each element of [x_min, y_min, x_max, y_max] & keep label info
+        for i in range(len(targets)):
+            label_noise = np.random.uniform(-gt_pixel_jitter, gt_pixel_jitter, size=5).astype(np.float32)
+            label_noise[4] = 0
+            targets[i] = torch.add(targets[i], torch.from_numpy(label_noise))
+        """
 
         if args.cuda:
             images = Variable(images.cuda())
