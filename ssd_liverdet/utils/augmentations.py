@@ -417,14 +417,15 @@ class PhotometricDistort(object):
 
 
 class SSDAugmentation(object):
-    def __init__(self, size=300, mean=(104, 117, 123)):
+    def __init__(self, pixeljitter=0.02, size=300, mean=(104, 117, 123)):
+        self.pixeljitter = pixeljitter
         self.mean = mean
         self.size = size
         self.augment = Compose([
             ConvertFromInts(),
             ToAbsoluteCoords(),
             # new augmentation: pixel jitter
-            PixelJitter(0.02),
+            PixelJitter(self.pixeljitter),
             PhotometricDistort(),
             Expand(self.mean),
             # TODO: consider these augmentations for CT

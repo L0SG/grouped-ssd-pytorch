@@ -20,17 +20,19 @@ from sklearn.model_selection import train_test_split
 def str2bool(v):
     return v.lower() in ("yes", "true", "t", "1")
 
+
+
 parser = argparse.ArgumentParser(description='Single Shot MultiBox Detector Training')
 parser.add_argument('--version', default='v2', help='conv11_2(v2) or pool6(v1) as last layer')
 parser.add_argument('--basenet', default='vgg16_reducedfc.pth', help='pretrained base model')
 parser.add_argument('--jaccard_threshold', default=0.5, type=float, help='Min Jaccard index for matching')
-parser.add_argument('--batch_size', default=64, type=int, help='Batch size for training')
+parser.add_argument('--batch_size', default=128, type=int, help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str, help='Resume from checkpoint')
 parser.add_argument('--num_workers', default=4, type=int, help='Number of workers used in dataloading')
-parser.add_argument('--iterations', default=120000, type=int, help='Number of training iterations')
+# parser.add_argument('--iterations', default=120000, type=int, help='Number of training iterations')
 parser.add_argument('--start_iter', default=0, type=int, help='Begin counting iterations starting from this value (should be used with resume)')
 parser.add_argument('--cuda', default=True, type=str2bool, help='Use cuda to train model')
-parser.add_argument('--lr', '--learning-rate', default=1e-5, type=float, help='initial learning rate')
+parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float, help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
 parser.add_argument('--weight_decay', default=5e-4, type=float, help='Weight decay for SGD')
 parser.add_argument('--gamma', default=0.1, type=float, help='Gamma update for SGD')
@@ -58,8 +60,8 @@ ssd_dim = 300  # only support 300 now
 means = (34, 34, 34)
 num_classes = 2 # lesion or background
 batch_size = args.batch_size
-accum_batch_size = 32
-iter_size = accum_batch_size / batch_size
+#accum_batch_size = 32
+#iter_size = accum_batch_size / batch_size
 max_iter = 120000
 weight_decay = 0.0005
 stepvalues = (80000, 100000, 120000)
@@ -172,9 +174,9 @@ def train():
     epoch = 0
     print('Loading Dataset...')
     dataset_train = FISHdetection(ct_train, coord_ssd_train,
-                                  SSDAugmentation(ssd_dim, means), dataset_name='liver_lesion_train')
+                                  SSDAugmentation(gt_pixel_jitter, ssd_dim, means), dataset_name='liver_lesion_train')
     dataset_valid = FISHdetection(ct_valid, coord_ssd_valid,
-                                  SSDAugmentation(ssd_dim, means), dataset_name='liver_detection_valid')
+                                  SSDAugmentation(gt_pixel_jitter, ssd_dim, means), dataset_name='liver_detection_valid')
     #    dataset_train = VOCDetection(args.voc_root, train_sets, SSDAugmentation(
 #        ssd_dim, means), AnnotationTransform())
 
@@ -294,10 +296,10 @@ def train():
             for idx in range(len(batch_iterator_val)):
                 img_val, tar_val = next(batch_iterator_val)
                 if args.cuda:
-                    img_val = Variable(img_val.cuda())
+                    img_val = Variable(img_val.cuda(), volatile=True)
                     tar_val = [Variable(anno.cuda(), volatile=True) for anno in tar_val]
                 else:
-                    img_val = Variable(img_val)
+                    img_val = Variable(img_val, volatile=True)
                     tar_val = [Variable(anno, volatile=True) for anno in tar_val]
 
                 out_val = net(img_val)
@@ -306,6 +308,7 @@ def train():
                 loss_l_val += loss_l_val_step
                 loss_c_val += loss_c_val_step
                 loss_val += loss_val_step
+                del out_val
             loss_l_val, loss_c_val, loss_val = loss_l_val/(idx+1), loss_c_val/(idx+1), loss_val/(idx+1)
             print('\n')
             print('VALID: iter ' + repr(iteration) + ' || Loss: %.4f ||' % (loss_val.data[0]), end='\n')
@@ -317,7 +320,7 @@ def train():
                     win=valid_lot,
                     update='append'
                 )
-            del img_val, tar_val, out_val
+            del img_val, tar_val
 
         # visdom train plot
         if args.visdom:

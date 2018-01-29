@@ -11,6 +11,7 @@ from torch.autograd import Variable
 from PIL import Image
 # from data import AnnotationTransform, VOCDetection, BaseTransform, VOC_CLASSES
 from data import FISHdetection, BaseTransform
+from utils.augmentations import SSDAugmentation
 import torch.utils.data as data
 from ssd import build_ssd
 import numpy as np
@@ -19,9 +20,10 @@ from layers.box_utils import nms
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from PIL import Image
+from sklearn.model_selection import train_test_split
 
 parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
-parser.add_argument('--trained_model', default='/home/tkdrlf9202/PycharmProjects/Liver_segmentation/ssd_liverdet/weights/ssd300_0712_15000.pth',
+parser.add_argument('--trained_model', default='/home/tkdrlf9202/PycharmProjects/Liver_segmentation/ssd_liverdet/weights/ssd300_0712_105000.pth',
                     type=str, help='Trained state_dict file path to open')
 parser.add_argument('--save_folder', default='eval/', type=str,
                     help='Dir to save results')
@@ -82,8 +84,10 @@ def test_net(save_folder, net, cuda, testset, transform, thresh):
         xs_gt, ys_gt = annotation[0][0], annotation[0][1]
         xd_gt, yd_gt = annotation[0][2] - xs_gt, annotation[0][3] - ys_gt
         # (y, x) start & delta of prediction
-        xs_p, ys_p = int(coords[0]), int(coords[1])
-        xd_p, yd_p = int(coords[2]) - xs_p, int(coords[3]) - ys_p
+        # do it only if the prediction exist
+        if 'coords' in locals():
+            xs_p, ys_p = int(coords[0]), int(coords[1])
+            xd_p, yd_p = int(coords[2]) - xs_p, int(coords[3]) - ys_p
 
         # visualization: draw gt & predicted bounding box and save to image
         output_image = img.copy()
@@ -91,10 +95,11 @@ def test_net(save_folder, net, cuda, testset, transform, thresh):
         ax.imshow(output_image)
         # green gt box
         rect_gt = patches.Rectangle((xs_gt, ys_gt), xd_gt, yd_gt, linewidth=1, edgecolor='g', facecolor='none')
-        # red pred box
-        rect_p = patches.Rectangle((xs_p, ys_p), xd_p, yd_p, linewidth=1, edgecolor='r', facecolor='none')
         ax.add_patch(rect_gt)
-        ax.add_patch(rect_p)
+        # red pred box
+        if 'coords' in locals():
+            rect_p = patches.Rectangle((xs_p, ys_p), xd_p, yd_p, linewidth=1, edgecolor='r', facecolor='none')
+            ax.add_patch(rect_p)
         plt.savefig(os.path.join(args.save_folder, 'test_'+str(idx)+'.png'))
         plt.close()
 
@@ -142,7 +147,7 @@ if __name__ == '__main__':
 
     # coord: [len_data, 3, 4] => should extend to 5 (include label)
     # all coords are lesion: add class label "1"
-    coord_with_label = np.zeros((coord.shape[0], 5))
+    coord_ssd = np.zeros((coord.shape[0], 5))
     for idx in range(coord.shape[0]):
         # each channels have different gt => since they are nearly same, just use the middle gt as main target
         crd = coord[idx][1]
@@ -150,7 +155,10 @@ if __name__ == '__main__':
         # loss function automatically defines another zero as background
         # https://github.com/amdegroot/ssd.pytorch/issues/17
         crd = np.append(crd, [0])
-        coord_with_label[idx] = crd
+        coord_ssd[idx] = crd
+
+    # split train & valid set: subject-level (without shuffle)
+    ct_train, ct_valid, coord_ssd_train, coord_ssd_valid = train_test_split(ct, coord_ssd, test_size=0.1, shuffle=False)
     """#########################################################"""
 
     if args.cuda:
@@ -158,7 +166,9 @@ if __name__ == '__main__':
         cudnn.benchmark = True
     # evaluation
     means = (34, 34, 34)
-    testset = FISHdetection(ct, coord_with_label, None, 'fish_detection')
-    test_net(args.save_folder, net, args.cuda, testset,
+    validset = FISHdetection(ct_valid, coord_ssd_valid, None, 'lesion_valid')
+    allset = FISHdetection(ct, coord_ssd, None, 'lesion_all')
+
+    test_net(args.save_folder, net, args.cuda, allset,
              BaseTransform(net.size, means),
              thresh=args.visual_threshold)
