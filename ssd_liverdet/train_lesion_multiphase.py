@@ -11,7 +11,7 @@ import torch.utils.data as data
 from data import FISHdetection, detection_collate, v2, v1
 from utils.augmentations import SSDAugmentation
 from layers.modules import MultiBoxLoss
-from ssd import build_ssd
+from ssd_multiphase import build_ssd
 import numpy as np
 import time
 import h5py
@@ -26,7 +26,7 @@ parser = argparse.ArgumentParser(description='Single Shot MultiBox Detector Trai
 parser.add_argument('--version', default='v2', help='conv11_2(v2) or pool6(v1) as last layer')
 parser.add_argument('--basenet', default='vgg16_reducedfc.pth', help='pretrained base model')
 parser.add_argument('--jaccard_threshold', default=0.5, type=float, help='Min Jaccard index for matching')
-parser.add_argument('--batch_size', default=32, type=int, help='Batch size for training')
+parser.add_argument('--batch_size', default=8, type=int, help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str, help='Resume from checkpoint')
 parser.add_argument('--num_workers', default=4, type=int, help='Number of workers used in dataloading')
 # parser.add_argument('--iterations', default=120000, type=int, help='Number of training iterations')
@@ -107,6 +107,10 @@ ct, coord = load_lesion_dataset(datapath)
 # make channels last & 0~255 uint8 image
 ct = np.transpose(ct * 255, [0, 2, 3, 1]).astype(dtype=np.uint8)
 
+"""DEBUG CODE: synthetic 4phase dataset (samples, 4, 512, 512, 3)"""
+ct_4phase = np.stack([ct, ct, ct, ct], axis=1)
+del ct
+
 # coord: [len_data, 3, 4] => should extend to 5 (include label)
 # all coords are lesion: add class label "1"
 coord_ssd = np.zeros((coord.shape[0], 5))
@@ -120,7 +124,7 @@ for idx in range(coord.shape[0]):
     coord_ssd[idx] = crd
 
 # split train & valid set: subject-level (without shuffle)
-ct_train, ct_valid, coord_ssd_train, coord_ssd_valid = train_test_split(ct, coord_ssd, test_size=0.1, shuffle=False)
+ct_train, ct_valid, coord_ssd_train, coord_ssd_valid = train_test_split(ct_4phase, coord_ssd, test_size=0.1, shuffle=False)
 """#########################################################"""
 
 """#################### Network Definition ####################"""
@@ -136,9 +140,9 @@ if args.resume:
     ssd_net.load_weights(args.resume)
 else:
     vgg_weights = torch.load(args.save_folder + args.basenet)
-    print('Loading base network...')
-    ssd_net.vgg.load_state_dict(vgg_weights)
-
+    print('pretrained weights not loaded: training from scratch...')
+    # print('Loading base network...')
+    # ssd_net.vgg.load_state_dict(vgg_weights
 if args.cuda:
     net = net.cuda()
 

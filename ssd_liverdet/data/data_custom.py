@@ -88,7 +88,12 @@ class FISHdetection(data.Dataset):
             #img = cv2.imread(img_path)
             # input img_path is already numpy
             img = img_path
-            height, width, channels = img.shape
+            # single phase image
+            if len(img.shape) == 3:
+                height, width, channels = img.shape
+            # multi-phase image: discard phase info
+            elif len(img.shape) == 4:
+                _, height, width, channels = img.shape
         except:
             img = cv2.imread('random_image.jpg')
             height, width, channels = img.shape
@@ -118,9 +123,11 @@ class FISHdetection(data.Dataset):
                 y_min, y_max = y_min/height, y_max/height
                 target[idx] = np.array([x_min, y_min, x_max, y_max, cls])
             img, boxes, labels = self.transform(img, target[:, :4], target[:, 4])
+            """ our data is not rgb
             # to rgb
             img = img[:, :, (2, 1, 0)]
             # img = img.transpose(2, 0, 1)
+            """
             target = np.hstack((boxes, np.expand_dims(labels, axis=1)))
         return torch.from_numpy(img).permute(2, 0, 1), target, height, width
         # return torch.from_numpy(img), target, height, width

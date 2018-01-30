@@ -23,7 +23,7 @@ from PIL import Image
 from sklearn.model_selection import train_test_split
 
 parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
-parser.add_argument('--trained_model', default='/home/tkdrlf9202/PycharmProjects/Liver_segmentation/ssd_liverdet/weights/ssd300_0712_105000.pth',
+parser.add_argument('--trained_model', default='/home/tkdrlf9202/PycharmProjects/Liver_segmentation/ssd_liverdet/weights/ssd300_0712_55000.pth',
                     type=str, help='Trained state_dict file path to open')
 parser.add_argument('--save_folder', default='eval/', type=str,
                     help='Dir to save results')

@@ -81,7 +81,10 @@ class SubtractMeans(object):
 
 class ToAbsoluteCoords(object):
     def __call__(self, image, boxes=None, labels=None):
-        height, width, channels = image.shape
+        if len(image.shape) == 3:
+            height, width, channels = image.shape
+        elif len(image.shape) == 4:
+            _, height, width, channels = image.shape
         boxes[:, 0] *= width
         boxes[:, 2] *= width
         boxes[:, 1] *= height
@@ -97,7 +100,10 @@ class PixelJitter(object):
     def __call__(self, image, boxes=None, labels=None):
         # add pixel jitter for targets for data augmentation
         # it applies random pixel shift (up to 1%) for each element of [x_min, y_min, x_max, y_max] & keep label info
-        height, width, channels = image.shape
+        if len(image.shape) == 3:
+            height, width, channels = image.shape
+        elif len(image.shape) == 4:
+            _, height, width, channels = image.shape
         label_noise = np.random.uniform(-self.percentage, self.percentage, size=4).astype(np.float32)
         label_noise[0] *= width
         label_noise[1] *= height
@@ -111,7 +117,10 @@ class PixelJitter(object):
 
 class ToPercentCoords(object):
     def __call__(self, image, boxes=None, labels=None):
-        height, width, channels = image.shape
+        if len(image.shape) == 3:
+            height, width, channels = image.shape
+        elif len(image.shape) == 4:
+            _, height, width, channels = image.shape
         boxes[:, 0] /= width
         boxes[:, 2] /= width
         boxes[:, 1] /= height
@@ -125,9 +134,15 @@ class Resize(object):
         self.size = size
 
     def __call__(self, image, boxes=None, labels=None):
-        image = cv2.resize(image, (self.size,
-                                 self.size))
-        return image, boxes, labels
+        if len(image.shape) == 3:
+            image = cv2.resize(image, (self.size,
+                                     self.size))
+            return image, boxes, labels
+        elif len(image.shape) == 4:
+            image_resized = np.zeros([image.shape[0], self.size, self.size, image.shape[3]], dtype=image.dtype)
+            for idx in range(image.shape[0]):
+                image_resized[idx] = cv2.resize(image[idx], (self.size, self.size))
+            return image_resized, boxes, labels
 
 
 class RandomSaturation(object):
@@ -251,7 +266,10 @@ class RandomSampleCrop(object):
         )
 
     def __call__(self, image, boxes=None, labels=None):
-        height, width, _ = image.shape
+        if len(image.shape) == 3:
+            height, width, _ = image.shape
+        elif len(image.shape) == 4:
+            _, height, width, _ = image.shape
         while True:
             # randomly choose a mode
             mode = random.choice(self.sample_options)
@@ -289,8 +307,10 @@ class RandomSampleCrop(object):
                     continue
 
                 # cut the crop from the image
-                current_image = current_image[rect[1]:rect[3], rect[0]:rect[2],
-                                              :]
+                if len(image.shape) == 3:
+                    current_image = current_image[rect[1]:rect[3], rect[0]:rect[2], :]
+                elif len(image.shape) == 4:
+                    current_image = current_image[:, rect[1]:rect[3], rect[0]:rect[2], :]
 
                 # keep overlap with gt box IF center in sampled patch
                 centers = (boxes[:, :2] + boxes[:, 2:]) / 2.0
@@ -333,32 +353,55 @@ class Expand(object):
         self.mean = mean
 
     def __call__(self, image, boxes, labels):
-        if random.randint(2):
+        #if random.randint(2):
+        #    return image, boxes, labels
+
+        # single-phase case: original
+        if len(image.shape) == 3:
+            height, width, depth = image.shape
+            ratio = random.uniform(1, 4)
+            left = random.uniform(0, width*ratio - width)
+            top = random.uniform(0, height*ratio - height)
+
+            expand_image = np.zeros(
+                (int(height*ratio), int(width*ratio), depth),
+                dtype=image.dtype)
+            expand_image[:, :, :] = self.mean
+            expand_image[int(top):int(top + height),
+                         int(left):int(left + width)] = image
+            image = expand_image
+
+            boxes = boxes.copy()
+            boxes[:, :2] += (int(left), int(top))
+            boxes[:, 2:] += (int(left), int(top))
+
             return image, boxes, labels
 
-        height, width, depth = image.shape
-        ratio = random.uniform(1, 4)
-        left = random.uniform(0, width*ratio - width)
-        top = random.uniform(0, height*ratio - height)
+        # multi-channel case: same expansion scheme for each phase
+        elif len(image.shape) == 4:
+            phase, height, width, depth = image.shape
+            ratio = random.uniform(1, 4)
+            left = random.uniform(0, width * ratio - width)
+            top = random.uniform(0, height * ratio - height)
 
-        expand_image = np.zeros(
-            (int(height*ratio), int(width*ratio), depth),
-            dtype=image.dtype)
-        expand_image[:, :, :] = self.mean
-        expand_image[int(top):int(top + height),
-                     int(left):int(left + width)] = image
-        image = expand_image
-
-        boxes = boxes.copy()
-        boxes[:, :2] += (int(left), int(top))
-        boxes[:, 2:] += (int(left), int(top))
-
-        return image, boxes, labels
-
+            expand_image = np.zeros(
+                (phase, int(height * ratio), int(width * ratio), depth),
+                dtype=image.dtype)
+            expand_image[:, :, :, :] = self.mean
+            expand_image[:, int(top):int(top + height),
+                         int(left):int(left + width), :] = image
+            image = expand_image
+            boxes = boxes.copy()
+            boxes[:, :2] += (int(left), int(top))
+            boxes[:, 2:] += (int(left), int(top))
+            return image, boxes, labels
 
 class RandomMirror(object):
     def __call__(self, image, boxes, classes):
-        _, width, _ = image.shape
+        if len(image.shape) == 3:
+            _, width, _ = image.shape
+        elif len(image.shape) == 4:
+            _, _, width, _ = image.shape
         if random.randint(2):
             image = image[:, ::-1]
             boxes = boxes.copy()
@@ -396,10 +439,11 @@ class PhotometricDistort(object):
     def __init__(self):
         self.pd = [
             RandomContrast(),
-            ConvertColor(transform='HSV'),
+            # CT is not RGB: disable colorconvert
+            #ConvertColor(transform='HSV'),
             RandomSaturation(),
             RandomHue(),
-            ConvertColor(current='HSV', transform='BGR'),
+            #ConvertColor(current='HSV', transform='BGR'),
             RandomContrast()
         ]
         self.rand_brightness = RandomBrightness()
@@ -440,3 +484,4 @@ class SSDAugmentation(object):
 
     def __call__(self, img, boxes, labels):
         return self.augment(img, boxes, labels)
+
