@@ -129,7 +129,15 @@ class FISHdetection(data.Dataset):
             # img = img.transpose(2, 0, 1)
             """
             target = np.hstack((boxes, np.expand_dims(labels, axis=1)))
-        return torch.from_numpy(img).permute(2, 0, 1), target, height, width
+        # single-phase case
+        if len(img.shape) == 3:
+            return torch.from_numpy(img).permute(2, 0, 1), target, height, width
+        # multi-phase case
+        if len(img.shape) == 4:
+            img_torch = torch.from_numpy(img).permute(0, 3, 1, 2).contiguous()
+            # collapse phase & channel
+            img_torch = img_torch.view(-1, img_torch.shape[2], img_torch.shape[3])
+            return img_torch, target, height, width
         # return torch.from_numpy(img), target, height, width
 
     def pull_image(self, index):

@@ -171,7 +171,7 @@ class RandomHue(object):
             image[:, :, 0][image[:, :, 0] < 0.0] += 360.0
         return image, boxes, labels
 
-
+"""
 class RandomLightingNoise(object):
     def __init__(self):
         self.perms = ((0, 1, 2), (0, 2, 1),
@@ -199,7 +199,7 @@ class ConvertColor(object):
         else:
             raise NotImplementedError
         return image, boxes, labels
-
+"""
 
 class RandomContrast(object):
     def __init__(self, lower=0.5, upper=1.5):
@@ -400,13 +400,19 @@ class RandomMirror(object):
     def __call__(self, image, boxes, classes):
         if len(image.shape) == 3:
             _, width, _ = image.shape
+            if random.randint(2):
+                image = image[:, ::-1]
+                boxes = boxes.copy()
+                boxes[:, 0::2] = width - boxes[:, 2::-2]
+            return image, boxes, classes
+
         elif len(image.shape) == 4:
             _, _, width, _ = image.shape
-        if random.randint(2):
-            image = image[:, ::-1]
-            boxes = boxes.copy()
-            boxes[:, 0::2] = width - boxes[:, 2::-2]
-        return image, boxes, classes
+            if random.randint(2):
+                image = image[:, :, ::-1]
+                boxes = boxes.copy()
+                boxes[:, 0::2] = width - boxes[:, 2::-2]
+            return image, boxes, classes
 
 
 class SwapChannels(object):
@@ -439,29 +445,34 @@ class PhotometricDistort(object):
     def __init__(self):
         self.pd = [
             RandomContrast(),
-            # CT is not RGB: disable colorconvert
-            #ConvertColor(transform='HSV'),
-            RandomSaturation(),
-            RandomHue(),
-            #ConvertColor(current='HSV', transform='BGR'),
+            # CT is not RGB: disable color convert, saturation & hue randomization
+            # ConvertColor(transform='HSV'),
+            # RandomSaturation(),
+            # RandomHue(),
+            # ConvertColor(current='HSV', transform='BGR'),
             RandomContrast()
         ]
         self.rand_brightness = RandomBrightness()
-        self.rand_light_noise = RandomLightingNoise()
+
+        # each channels should not be shuffled for CT
+        #self.rand_light_noise = RandomLightingNoise()
 
     def __call__(self, image, boxes, labels):
         im = image.copy()
         im, boxes, labels = self.rand_brightness(im, boxes, labels)
+        # since convertcolor & rs & rh are disabled, both distort are same: rc only
         if random.randint(2):
             distort = Compose(self.pd[:-1])
         else:
             distort = Compose(self.pd[1:])
         im, boxes, labels = distort(im, boxes, labels)
-        return self.rand_light_noise(im, boxes, labels)
+        # do not use lightning noise: CT channels are z-axis
+        # return self.rand_light_noise(im, boxes, labels)
+        return im, boxes, labels
 
 
 class SSDAugmentation(object):
-    def __init__(self, pixeljitter=0.02, size=300, mean=(104, 117, 123)):
+    def __init__(self, pixeljitter=0.01, size=300, mean=(104, 117, 123)):
         self.pixeljitter = pixeljitter
         self.mean = mean
         self.size = size
