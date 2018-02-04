@@ -156,6 +156,7 @@ def weights_init(m):
 
 if not args.resume:
     print('Initializing weights...')
+    ssd_net.vgg.apply(weights_init)
     # initialize newly added layers' weights with xavier method
     ssd_net.extras.apply(weights_init)
     ssd_net.loc.apply(weights_init)

@@ -134,9 +134,13 @@ class FISHdetection(data.Dataset):
             return torch.from_numpy(img).permute(2, 0, 1), target, height, width
         # multi-phase case
         if len(img.shape) == 4:
+            img_torch = torch.from_numpy(img).permute(0, 3, 1, 2)
+
+            """ contiguous call for CPU seems slow, collapse after CUDA instead
             img_torch = torch.from_numpy(img).permute(0, 3, 1, 2).contiguous()
             # collapse phase & channel
             img_torch = img_torch.view(-1, img_torch.shape[2], img_torch.shape[3])
+            """
             return img_torch, target, height, width
         # return torch.from_numpy(img), target, height, width
 
