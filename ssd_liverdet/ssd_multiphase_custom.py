@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 from layers import *
-from data import v2
+from data import v2_custom
 import os
 
 class SSD(nn.Module):
@@ -28,7 +28,7 @@ class SSD(nn.Module):
         self.phase = phase
         self.num_classes = num_classes
         # TODO: implement __call__ in PriorBox
-        self.priorbox = PriorBox(v2)
+        self.priorbox = PriorBox(v2_custom)
         self.priors = Variable(self.priorbox.forward(), volatile=True)
         self.size = 300
 
@@ -74,6 +74,7 @@ class SSD(nn.Module):
             x = self.vgg[k](x)
 
         s = self.L2Norm(x)
+        # TODO: append lower level features
         sources.append(s)
 
         # apply vgg up to fc7
@@ -131,15 +132,15 @@ def vgg(cfg, i, batch_norm=False):
             layers += [nn.MaxPool2d(kernel_size=2, stride=2, ceil_mode=True)]
         else:
             # depthwise separable conv: add groups=4 (4 phases)
-            conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
+            conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1, groups=4)
             if batch_norm:
                 layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
             else:
                 layers += [conv2d, nn.ReLU(inplace=True)]
             in_channels = v
     pool5 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
-    conv6 = nn.Conv2d(512, 1024, kernel_size=3, padding=6, dilation=6)
-    conv7 = nn.Conv2d(1024, 1024, kernel_size=1)
+    conv6 = nn.Conv2d(512, 1024, kernel_size=3, padding=6, dilation=6, groups=4)
+    conv7 = nn.Conv2d(1024, 1024, kernel_size=1, groups=4)
     layers += [pool5, conv6,
                nn.ReLU(inplace=True), conv7, nn.ReLU(inplace=True)]
     return layers

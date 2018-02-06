@@ -11,7 +11,7 @@ import torch.utils.data as data
 from data import FISHdetection, detection_collate, v2, v1
 from utils.augmentations import SSDAugmentation
 from layers.modules import MultiBoxLoss
-from ssd_multiphase import build_ssd
+from ssd_multiphase_custom import build_ssd
 import numpy as np
 import time
 import h5py
@@ -26,7 +26,7 @@ parser = argparse.ArgumentParser(description='Single Shot MultiBox Detector Trai
 parser.add_argument('--version', default='v2', help='conv11_2(v2) or pool6(v1) as last layer')
 parser.add_argument('--basenet', default='vgg16_reducedfc.pth', help='pretrained base model')
 parser.add_argument('--jaccard_threshold', default=0.5, type=float, help='Min Jaccard index for matching')
-parser.add_argument('--batch_size', default=32, type=int, help='Batch size for training')
+parser.add_argument('--batch_size', default=128, type=int, help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str, help='Resume from checkpoint')
 parser.add_argument('--num_workers', default=4, type=int, help='Number of workers used in dataloading')
 # parser.add_argument('--iterations', default=120000, type=int, help='Number of training iterations')
@@ -270,6 +270,38 @@ def train():
             images = images.view(images.shape[0], -1, images.shape[3], images.shape[4])
             images = Variable(images)
             targets = [Variable(anno, volatile=True) for anno in targets]
+
+        """ DEBUG CODE: printout augmented images & targets"""
+        if False:
+            import matplotlib.pyplot as plt
+            import matplotlib.patches as patches
+            from PIL import Image
+            print('Debug mode: printing augmented data...')
+            images_print = images.data[:, :, :, :].cpu().numpy()
+            images_print[images_print < 0] = 0
+            targets_print = np.array([target.data.cpu().numpy().squeeze()[:4] for target in targets])
+            targets_print *= images_print.shape[2]
+            images_print = images_print.astype(np.uint8)
+
+            # center format to min-max format
+            min_x, min_y, max_x, max_y = targets_print[:, 0], targets_print[:, 1], targets_print[:, 2], targets_print[:, 3]
+            width = (max_x - min_x).astype(np.int32)
+            height = (max_y - min_y).astype(np.int32)
+            min_x = min_x.astype(np.int32)
+            min_y = min_y.astype(np.int32)
+
+            for idx in range(images_print.shape[0]):
+                for idx_img in range(images_print.shape[1]):
+                    # visualization: draw gt & predicted bounding box and save to image
+                    output_image = images_print[idx, idx_img]
+                    fig, ax = plt.subplots(1)
+                    ax.imshow(output_image, cmap='gray')
+                    # green gt box
+                    rect_gt = patches.Rectangle((min_x[idx], min_y[idx]), width[idx], height[idx], linewidth=2, edgecolor='g', facecolor='none')
+                    ax.add_patch(rect_gt)
+                    plt.savefig(os.path.join(args.save_folder, 'train_' + str(idx) + '_' + str(idx_img) + '.png'))
+                    plt.close()
+            exit()
 
         # forward
         t0 = time.time()
