@@ -1,9 +1,12 @@
+
 # used to extract roi from image file
 # input: 512x512x3 bmp image with box-roi (yellow or red)
 # output: text file containing [x_start, x_delta, y_start, y_delta]
 
 # strategy: sum over channels to 512x512 -> yellow or red has specific value
 # make them 1, and 0 for other areas -> extract roi from binary image
+
+"""obsolete code, use rgb version"""
 
 import numpy as np
 import glob

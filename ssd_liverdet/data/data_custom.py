@@ -104,9 +104,18 @@ class FISHdetection(data.Dataset):
 
         if self.transform is not None:
             target = np.array(target)
+            """
+            # multi-phase data have 4 ground truth
+            # randomly select one target
+            # TODO: fix this if the data is multi-class target since this assumes that all labels are the same
+            rng = np.random.randint(low=0, high=target.shape[0]+1)
+            target = target[rng]
+            """
+            """
             # TODO: fix this later, generic dataset have multiple lesions
             # currently data have only 1 lesion, unsqueeze first dim
-            np.expand_dims(target, 0)
+            target = np.expand_dims(target, 0)
+            """
             # scale each coord from absolute pixels to 0~1
             for idx in range(target.shape[0]):
                 """

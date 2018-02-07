@@ -1,6 +1,11 @@
 # used to extract roi from image file
 # input: 512x512x3 bmp image with box-roi (yellow or red)
-# output: text file containing [x_start, x_delta, y_start, y_delta]
+# output: text file containing [x_min, y_min, x_max, y_max]
+
+# append label info for use in SSD model
+# appending zero as class label yields [x_min, y_min, x_max, y_max, 0]
+# zero class label is incremented by +1 automatically inside the SSD model
+# SSD model uses its own zero class as background
 
 # strategy: sum over channels to 512x512 -> yellow or red has specific value
 # make them 1, and 0 for other areas -> extract roi from binary image
@@ -13,19 +18,20 @@ import matplotlib.patches as patches
 from PIL import Image
 import pickle
 
-roi_image_path = '/media/hdd/tkdrlf9202/Datasets/liver_lesion/roi_image'
-roi_coordinate_path = '/media/hdd/tkdrlf9202/Datasets/liver_lesion/roi_coordinate'
+roi_image_path = '/media/hdd/tkdrlf9202/Datasets/liver_lesion_aligned/roi_image'
+roi_coordinate_path = '/media/hdd/tkdrlf9202/Datasets/liver_lesion_aligned/roi_coordinate'
 
 # specify rgb value of roi lines
 # yellow have 2-pixel thick line, red have 1-pixel line
 rgb_value_yellow = (255, 255, 0)
 rgb_value_red = (255, 0, 0)
+lesion_class_label = 0
 
 # traverse over subjects
 for subject in glob.glob(os.path.join(roi_image_path, '*')):
     # debug: A86 have red roi
-    #if os.path.basename(os.path.normpath(subject)) != 'A86':
-    #    continue
+    if os.path.basename(os.path.normpath(subject)) == 'A196' or os.path.basename(os.path.normpath(subject)) == 'A200':
+        continue
     basename_subject = os.path.basename(os.path.normpath(subject))
     path_subject = os.path.join(roi_coordinate_path, basename_subject)
     if not os.path.exists(path_subject):
@@ -67,7 +73,11 @@ for subject in glob.glob(os.path.join(roi_image_path, '*')):
             # delta must be positive
             assert x_delta > 0 and y_delta > 0
 
-            coordinate = [y_start, x_start, y_delta, x_delta]
+            #coordinate = [y_start, x_start, y_delta, x_delta]
+            # use [x_min, y_min, x_max, y_max] type
+            coordinate = [x_start, y_start, x_end, y_end]
+            # append zero class label for lesion
+            coordinate.append(lesion_class_label)
             # write coordinate to text file
             suffix = slice[-8:-4]
 
@@ -86,4 +96,4 @@ for subject in glob.glob(os.path.join(roi_image_path, '*')):
             plt.close()
             """
     print('subject ' + str(os.path.basename(os.path.normpath(subject))) +
-          ' passed: [y_start, x_start, y_delta, x_delta] of last slice = ' + str(coordinate))
+          ' passed: [x_min, y_min, x_max, y_max] of last slice = ' + str(coordinate))

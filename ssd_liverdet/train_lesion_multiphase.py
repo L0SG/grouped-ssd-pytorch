@@ -26,7 +26,7 @@ parser = argparse.ArgumentParser(description='Single Shot MultiBox Detector Trai
 parser.add_argument('--version', default='v2', help='conv11_2(v2) or pool6(v1) as last layer')
 parser.add_argument('--basenet', default='vgg16_reducedfc.pth', help='pretrained base model')
 parser.add_argument('--jaccard_threshold', default=0.5, type=float, help='Min Jaccard index for matching')
-parser.add_argument('--batch_size', default=128, type=int, help='Batch size for training')
+parser.add_argument('--batch_size', default=32, type=int, help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str, help='Resume from checkpoint')
 parser.add_argument('--num_workers', default=4, type=int, help='Number of workers used in dataloading')
 # parser.add_argument('--iterations', default=120000, type=int, help='Number of training iterations')
@@ -79,7 +79,7 @@ if args.visdom:
 
 """"########## Data Loading & dimension matching ##########"""
 # load custom CT dataset
-datapath = '/home/tkdrlf9202/Datasets/liver_lesion/lesion_dataset_Ponly_1332.h5'
+datapath = '/home/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
 train_sets = [('liver_lesion')]
 
 
@@ -96,35 +96,32 @@ def load_lesion_dataset(data_path):
         # load the preprocessed dataset dump
         print('loading lesion dataset...')
         with h5py.File(data_path, 'r') as dataset_h5:
-            ct_flattened = dataset_h5['ct'][:]
-            coordinate_flattened = dataset_h5['coordinate'][:]
+            group_ct = dataset_h5['ct']
+            group_coordinate = dataset_h5['coordinate']
+            ct = [i[:] for i in group_ct.values()]
+            coordinate = [i[:] for i in group_coordinate.values()]
             dataset_h5.close()
 
-    return ct_flattened, coordinate_flattened
+    return ct, coordinate
 
 ct, coord = load_lesion_dataset(datapath)
-# ct: [len_data, 3, 512, 512] (3 continous slides)
+# ct: [subjects, sample, phase, channel, 512, 512]
+# coord: [subjects, sample, phase, channel, 5], [x_min, y_min, x_max, y_max, 0 (lesion class label)] format
 # make channels last & 0~255 uint8 image
-ct = np.transpose(ct * 255, [0, 2, 3, 1]).astype(dtype=np.uint8)
+for idx in range(len(ct)):
+    ct[idx] = np.transpose(ct[idx] * 255, [0, 1, 3, 4, 2]).astype(dtype=np.uint8)
+    # use only coordinate from the middle slice, ditch the upper & lower ones
+    coord[idx] = coord[idx][:, :, 1, :]
 
-"""DEBUG CODE: synthetic 4phase dataset (samples, 4, 512, 512, 3)"""
-ct_4phase = np.stack([ct, ct, ct, ct], axis=1)
-del ct
+# split train & valid set, subject-level (without shuffle)
+ct_train, ct_valid, coord_ssd_train, coord_ssd_valid = train_test_split(ct, coord, test_size=0.1, shuffle=False)
 
-# coord: [len_data, 3, 4] => should extend to 5 (include label)
-# all coords are lesion: add class label "1"
-coord_ssd = np.zeros((coord.shape[0], 5))
-for idx in range(coord.shape[0]):
-    # each channels have different gt => since they are nearly same, just use the middle gt as main target
-    crd = coord[idx][1]
-    # add zero as class index: it is treated to 1 by adding +1 to that
-    # loss function automatically defines another zero as background
-    # https://github.com/amdegroot/ssd.pytorch/issues/17
-    crd = np.append(crd, [0])
-    coord_ssd[idx] = crd
+# flatten the subject & sample dimension for each sets by stacking
+ct_train = np.vstack(ct_train)
+ct_valid = np.vstack(ct_valid)
+coord_ssd_train = np.vstack(coord_ssd_train)
+coord_ssd_valid = np.vstack(coord_ssd_valid)
 
-# split train & valid set: subject-level (without shuffle)
-ct_train, ct_valid, coord_ssd_train, coord_ssd_valid = train_test_split(ct_4phase, coord_ssd, test_size=0.1, shuffle=False)
 """#########################################################"""
 
 """#################### Network Definition ####################"""

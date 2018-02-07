@@ -38,29 +38,35 @@ def normalize_image(img):
 
 def generate_roi_dataset(ct_path, roi_coordinate_path):
 
-    ct_data = []
-    coordinate_data = []
+    ct_data_master = []
+    coordinate_data_master = []
 
     # traverse over subjects
-    for subject in glob.glob(os.path.join(ct_path, '*')):
+    for subject in glob.glob(os.path.join(roi_coordinate_path, '*')):
+        ct_data_subject = []
+        coordinate_data_subject = []
+
         basename_subject = os.path.basename(os.path.normpath(subject))
-        path_subject = os.path.join(roi_coordinate_path, basename_subject)
+        path_subject = os.path.join(ct_path, basename_subject)
+        ct_data_oneslice_4phase = []
+        coordinate_oneslice_4phase = []
         # traverse over phases
         for phase in glob.glob(os.path.join(subject, '*')):
             basename_phase = os.path.basename(os.path.normpath(phase))
             path_phase = os.path.join(path_subject, basename_phase)
-
+            """
             # use P phase only
             if basename_phase != 'P':
                 continue
-
-            # get name of all slices
-            path_slices = sorted(os.listdir(phase))
+            """
+            # get name of all ct slices
+            path_slices = sorted(os.listdir(path_phase))
             path_slices_basename = [name[:-4] for name in path_slices]
             # get name of coordinate files
-            path_coordinates = sorted(os.listdir(os.path.join(roi_coordinate_path,
-                                                              basename_subject,
-                                                              basename_phase)))
+            path_coordinates = sorted(os.listdir(phase))
+            #path_coordinates = sorted(os.listdir(os.path.join(roi_coordinate_path,
+            #                                                  basename_subject,
+            #                                                  basename_phase)))
             path_coordinates_basename = [name[:-4] for name in path_coordinates]
 
             # obtain intersection (data that have both image & coordinate)
@@ -82,26 +88,39 @@ def generate_roi_dataset(ct_path, roi_coordinate_path):
                 coordinate = pickle.load(coordinate_file)
                 ct_data_oneslice.append(ct_image_preprocessed)
                 coordinate_oneslice.append(coordinate)
-        assert len(ct_data_oneslice) == len(coordinate_oneslice)
+            assert len(ct_data_oneslice) == len(coordinate_oneslice)
+            ct_data_oneslice_4phase.append(ct_data_oneslice)
+            coordinate_oneslice_4phase.append(coordinate_oneslice)
+
+        ct_data_oneslice_4phase = np.array(ct_data_oneslice_4phase)
+        coordinate_oneslice_4phase = np.array(coordinate_oneslice_4phase)
         # make 3 continuous slides as a single data point to enable the CNN to recognize vertical info
         # consider 3 slides to additional channel (like RGB)
-        for idx_slice in range(len(ct_data_oneslice) - 2):
-            ct_data_threeslices = np.array(ct_data_oneslice[idx_slice:idx_slice+3])
-            coordinate_threeslices = np.array(coordinate_oneslice[idx_slice:idx_slice+3])
-            # append to master list
-            ct_data.append(ct_data_threeslices)
-            coordinate_data.append(coordinate_threeslices)
+        for idx_slice in range(ct_data_oneslice_4phase.shape[1] - 2):
 
-    assert len(ct_data) == len(coordinate_data)
-    return ct_data, coordinate_data
+            ct_data_threeslices = np.array(ct_data_oneslice_4phase[:, idx_slice:idx_slice+3, :, :])
+            coordinate_threeslices = np.array(coordinate_oneslice_4phase[:, idx_slice:idx_slice+3, :])
+            #ct_data_threeslices = np.array(ct_data_oneslice[idx_slice:idx_slice+3])
+            #coordinate_threeslices = np.array(coordinate_oneslice[idx_slice:idx_slice+3])
+            # append to subject list
+            ct_data_subject.append(ct_data_threeslices)
+            coordinate_data_subject.append(coordinate_threeslices)
+        ct_data_subject = np.array(ct_data_subject)
+        coordinate_data_subject = np.array(coordinate_data_subject)
+        # append to master list
+        ct_data_master.append(ct_data_subject)
+        coordinate_data_master.append(coordinate_data_subject)
+
+    assert len(ct_data_master) == len(coordinate_data_master)
+    return ct_data_master, coordinate_data_master
 
 # generate roi dataset
 # each ct image slice have 1 or more (n) bounding boxes [n, y_start, x_start, y_delta, x_delta]
 # if using P phase only, input ct should be [n, 1, 512, 512] (1 is greyscale)
 
-ct_path = '/media/hdd/tkdrlf9202/Datasets/liver_lesion/ct'
-roi_coordinate_path = '/media/hdd/tkdrlf9202/Datasets/liver_lesion/roi_coordinate'
-dataset_save_location = '/home/tkdrlf9202/Datasets/liver_lesion/lesion_dataset_Ponly_1332.h5'
+ct_path = '/media/hdd/tkdrlf9202/Datasets/liver_lesion_aligned/ct'
+roi_coordinate_path = '/media/hdd/tkdrlf9202/Datasets/liver_lesion_aligned/roi_coordinate'
+dataset_save_location = '/home/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
 
 CT_IMAGE_SIZE = (512, 512)
 
@@ -119,7 +138,8 @@ for idx in range(len(coordinate_data)):
     width = y_delta
     coordinate_data[idx] = np.array([center_x, center_y, height, width])
 """
-
+# handle coord info in roi_extractor_rgb, not here
+"""
 # the above is WRONG: it uses [x_min, y_min, x_max, y_max]
 # convert [y_start, x_start, y_delta, x_delta] to [x_min, y_min, x_max, y_max]
 for idx in range(len(coordinate_data)):
@@ -128,6 +148,7 @@ for idx in range(len(coordinate_data)):
         x_min, y_min = x_start, y_start
         x_max, y_max = x_start + x_delta, y_start + y_delta
         coordinate_data[idx][idx_slice] = np.array([x_min, y_min, x_max, y_max])
+"""
 
 print(np.array(ct_data).shape, np.array(coordinate_data).shape)
 # save the dataset as python list type
@@ -135,6 +156,9 @@ print(np.array(ct_data).shape, np.array(coordinate_data).shape)
 # but since lesion bbox will have variable length (2 or more lesions), maybe inefficient?
 print('dumping dataset...')
 with h5py.File(dataset_save_location, 'w') as dump_h5:
-    dump_h5.create_dataset('ct', data=ct_data)
-    dump_h5.create_dataset('coordinate', data=coordinate_data)
+    group_ct = dump_h5.create_group('ct')
+    group_coordinate = dump_h5.create_group('coordinate')
+    for idx in range(len(ct_data)):
+        group_ct.create_dataset('ct_' + str(idx), data=ct_data[idx])
+        group_coordinate.create_dataset('coordinate_' + str(idx), data=coordinate_data[idx])
     dump_h5.close()
