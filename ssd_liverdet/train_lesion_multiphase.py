@@ -119,8 +119,8 @@ ct_train, ct_valid, coord_ssd_train, coord_ssd_valid = train_test_split(ct, coor
 # flatten the subject & sample dimension for each sets by stacking
 ct_train = np.vstack(ct_train)
 ct_valid = np.vstack(ct_valid)
-coord_ssd_train = np.vstack(coord_ssd_train)
-coord_ssd_valid = np.vstack(coord_ssd_valid)
+coord_ssd_train = np.vstack(coord_ssd_train).astype(np.float64)
+coord_ssd_valid = np.vstack(coord_ssd_valid).astype(np.float64)
 
 """#########################################################"""
 

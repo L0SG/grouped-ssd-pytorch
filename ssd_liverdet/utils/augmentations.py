@@ -104,7 +104,7 @@ class PixelJitter(object):
             height, width, channels = image.shape
         elif len(image.shape) == 4:
             _, height, width, channels = image.shape
-        label_noise = np.random.uniform(-self.percentage, self.percentage, size=4).astype(np.float32)
+        label_noise = np.random.uniform(-self.percentage, self.percentage, size=(boxes.shape[0], 4)).astype(np.float32)
         label_noise[0] *= width
         label_noise[1] *= height
         label_noise[2] *= width
