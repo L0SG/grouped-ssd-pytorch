@@ -26,7 +26,7 @@ parser = argparse.ArgumentParser(description='Single Shot MultiBox Detector Trai
 parser.add_argument('--version', default='v2', help='conv11_2(v2) or pool6(v1) as last layer')
 parser.add_argument('--basenet', default='vgg16_reducedfc.pth', help='pretrained base model')
 parser.add_argument('--jaccard_threshold', default=0.5, type=float, help='Min Jaccard index for matching')
-parser.add_argument('--batch_size', default=32, type=int, help='Batch size for training')
+parser.add_argument('--batch_size', default=64, type=int, help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str, help='Resume from checkpoint')
 parser.add_argument('--num_workers', default=4, type=int, help='Number of workers used in dataloading')
 # parser.add_argument('--iterations', default=120000, type=int, help='Number of training iterations')
@@ -79,7 +79,7 @@ if args.visdom:
 
 """"########## Data Loading & dimension matching ##########"""
 # load custom CT dataset
-datapath = '/home/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
+datapath = '/home/vision/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
 train_sets = [('liver_lesion')]
 
 
@@ -323,7 +323,7 @@ def train():
                 viz.image(images.data[random_batch_index].cpu().numpy())
 
         # validation phase for each several train iter
-        if iteration % 100 == 0:
+        if iteration % 100 == 0 and iteration > 10:
             del images, targets
             net.eval()
             loss_l_val, loss_c_val, loss_val = 0., 0., 0.
@@ -360,28 +360,30 @@ def train():
             del img_val, tar_val
 
         # visdom train plot
-        if args.visdom:
-            viz.line(
-                X=torch.ones((1, 3)).cpu() * iteration,
-                Y=torch.Tensor([loss_l.data[0], loss_c.data[0],
-                    loss_l.data[0] + loss_c.data[0]]).unsqueeze(0).cpu(),
-                win=lot,
-                update='append'
-            )
-            # hacky fencepost solution for 0th epoch plot
-            if iteration == 0:
+        # skip the first 10 iteration plot: too high loss, less pretty
+        if iteration > 10:
+            if args.visdom:
                 viz.line(
-                    X=torch.zeros((1, 3)).cpu(),
-                    Y=torch.Tensor([loc_loss, conf_loss,
-                        loc_loss + conf_loss]).unsqueeze(0).cpu(),
-                    win=epoch_lot,
-                    update=True
+                    X=torch.ones((1, 3)).cpu() * iteration,
+                    Y=torch.Tensor([loss_l.data[0], loss_c.data[0],
+                        loss_l.data[0] + loss_c.data[0]]).unsqueeze(0).cpu(),
+                    win=lot,
+                    update='append'
                 )
+                # hacky fencepost solution for 0th epoch plot
+                if iteration == 0:
+                    viz.line(
+                        X=torch.zeros((1, 3)).cpu(),
+                        Y=torch.Tensor([loc_loss, conf_loss,
+                            loc_loss + conf_loss]).unsqueeze(0).cpu(),
+                        win=epoch_lot,
+                        update=True
+                    )
 
         # save checkpoint
         if iteration % 5000 == 0:
             print('Saving state, iter:', iteration)
-            torch.save(ssd_net.state_dict(), 'weights/ssd300_0712_' +
+            torch.save(ssd_net.state_dict(), 'weights/ssd300_allconv_' +
                        repr(iteration) + '.pth')
     torch.save(ssd_net.state_dict(), args.save_folder + '' + args.version + '.pth')
 
