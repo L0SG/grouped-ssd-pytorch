@@ -79,7 +79,7 @@ if args.visdom:
 
 """"########## Data Loading & dimension matching ##########"""
 # load custom CT dataset
-datapath = '/home/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
+datapath = '/home/vision/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
 train_sets = [('liver_lesion')]
 
 
@@ -156,7 +156,7 @@ def weights_init(m):
 
 if not args.resume:
     print('Initializing weights...')
-    ssd_net.vgg.apply(weights_init)
+    #ssd_net.vgg.apply(weights_init)
     # initialize newly added layers' weights with xavier method
     ssd_net.extras.apply(weights_init)
     ssd_net.loc.apply(weights_init)
@@ -374,7 +374,7 @@ def train():
         # save checkpoint
         if iteration % 5000 == 0:
             print('Saving state, iter:', iteration)
-            torch.save(ssd_net.state_dict(), 'weights/ssd300_allconv_' +
+            torch.save(ssd_net.state_dict(), 'weights/ssd300_vgg_4groupconv_' +
                        repr(iteration) + '.pth')
     torch.save(ssd_net.state_dict(), args.save_folder + '' + args.version + '.pth')
 
