@@ -13,7 +13,7 @@ from PIL import Image
 from data import FISHdetection, BaseTransform
 from utils.augmentations import SSDAugmentation
 import torch.utils.data as data
-from ssd import build_ssd
+from ssd_multiphase_custom import build_ssd
 import numpy as np
 import h5py
 from layers.box_utils import nms
@@ -23,7 +23,7 @@ from PIL import Image
 from sklearn.model_selection import train_test_split
 
 parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
-parser.add_argument('--trained_model', default='/home/tkdrlf9202/PycharmProjects/Liver_segmentation/ssd_liverdet/weights/ssd300_0712_55000.pth',
+parser.add_argument('--trained_model', default='/home/tkdrlf9202/PycharmProjects/Liver_segmentation/ssd_liverdet/weights/ssd300_allconv_25000.pth',
                     type=str, help='Trained state_dict file path to open')
 parser.add_argument('--save_folder', default='eval/', type=str,
                     help='Dir to save results')
@@ -45,10 +45,13 @@ def test_net(save_folder, net, cuda, testset, transform, thresh):
     num_images = len(testset)
     for idx in range(num_images):
         print('Testing image {:d}/{:d}....'.format(idx+1, num_images))
+        # pull img & annotations
         img = testset.pull_image(idx)
         annotation = [testset.pull_anno(idx)]
-        x = torch.from_numpy(transform(img)[0]).permute(2, 0, 1)
-        x = Variable(x.unsqueeze(0))
+        # base transform the image and permute to [phase, channel, h, w] and flatten to [1, channel, h, w]
+        x = torch.from_numpy(transform(img)[0]).permute(0, 3, 1, 2).contiguous()
+        x = x.view(-1, x.shape[2], x.shape[3])
+        x = Variable(x, volatile=True).unsqueeze(0)
 
         with open(filename, mode='a') as f:
             #f.write('\nGROUND TRUTH FOR: '+img_id+'\n')
@@ -116,7 +119,7 @@ if __name__ == '__main__':
     #testset = VOCDetection(args.voc_root, [('2007', 'test')], None, AnnotationTransform())
     """"########## Data Loading & dimension matching ##########"""
     # load custom CT dataset
-    datapath = '/home/tkdrlf9202/Datasets/liver_lesion/lesion_dataset_Ponly_1332.h5'
+    datapath = '/home/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
     train_sets = [('liver_lesion')]
 
 
@@ -133,32 +136,32 @@ if __name__ == '__main__':
             # load the preprocessed dataset dump
             print('loading lesion dataset...')
             with h5py.File(data_path, 'r') as dataset_h5:
-                ct_flattened = dataset_h5['ct'][:]
-                coordinate_flattened = dataset_h5['coordinate'][:]
+                group_ct = dataset_h5['ct']
+                group_coordinate = dataset_h5['coordinate']
+                ct = [i[:] for i in group_ct.values()]
+                coordinate = [i[:] for i in group_coordinate.values()]
                 dataset_h5.close()
 
-        return ct_flattened, coordinate_flattened
+        return ct, coordinate
 
 
     ct, coord = load_lesion_dataset(datapath)
-    # ct: [len_data, 3, 512, 512] (3 continous slides)
+    # ct: [subjects, sample, phase, channel, 512, 512]
+    # coord: [subjects, sample, phase, channel, 5], [x_min, y_min, x_max, y_max, 0 (lesion class label)] format
     # make channels last & 0~255 uint8 image
-    ct = np.transpose(ct * 255, [0, 2, 3, 1]).astype(dtype=np.uint8)
+    for idx in range(len(ct)):
+        ct[idx] = np.transpose(ct[idx] * 255, [0, 1, 3, 4, 2]).astype(dtype=np.uint8)
+        # use only coordinate from the middle slice, ditch the upper & lower ones
+        coord[idx] = coord[idx][:, :, 1, :]
 
-    # coord: [len_data, 3, 4] => should extend to 5 (include label)
-    # all coords are lesion: add class label "1"
-    coord_ssd = np.zeros((coord.shape[0], 5))
-    for idx in range(coord.shape[0]):
-        # each channels have different gt => since they are nearly same, just use the middle gt as main target
-        crd = coord[idx][1]
-        # add zero as class index: it is treated to 1 by adding +1 to that
-        # loss function automatically defines another zero as background
-        # https://github.com/amdegroot/ssd.pytorch/issues/17
-        crd = np.append(crd, [0])
-        coord_ssd[idx] = crd
+    # split train & valid set, subject-level (without shuffle)
+    ct_train, ct_valid, coord_ssd_train, coord_ssd_valid = train_test_split(ct, coord, test_size=0.1, shuffle=False)
 
-    # split train & valid set: subject-level (without shuffle)
-    ct_train, ct_valid, coord_ssd_train, coord_ssd_valid = train_test_split(ct, coord_ssd, test_size=0.1, shuffle=False)
+    # flatten the subject & sample dimension for each sets by stacking
+    ct_train = np.vstack(ct_train)
+    ct_valid = np.vstack(ct_valid)
+    coord_ssd_train = np.vstack(coord_ssd_train).astype(np.float64)
+    coord_ssd_valid = np.vstack(coord_ssd_valid).astype(np.float64)
     """#########################################################"""
 
     if args.cuda:
@@ -167,7 +170,7 @@ if __name__ == '__main__':
     # evaluation
     means = (34, 34, 34)
     validset = FISHdetection(ct_valid, coord_ssd_valid, None, 'lesion_valid')
-    allset = FISHdetection(ct, coord_ssd, None, 'lesion_all')
+    allset = FISHdetection(np.vstack(ct), np.vstack(coord).astype(np.float64), None, 'lesion_all')
 
     test_net(args.save_folder, net, args.cuda, allset,
              BaseTransform(net.size, means),

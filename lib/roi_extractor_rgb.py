@@ -52,8 +52,12 @@ for subject in glob.glob(os.path.join(roi_image_path, '*')):
             index_yellow = np.where(np.all(roi_image_tensor == rgb_value_yellow, axis=-1))
             index_red = np.where(np.all(roi_image_tensor == rgb_value_red, axis=-1))
             # either one of the index list should be empty
-            assert not(len(index_yellow[0]) != 0 and len(index_red[0]) != 0)
-            assert not (len(index_yellow[0]) == 0 and len(index_red[0]) == 0)
+            # but A258 is red bbox, yellow arrow, skip just for this one, apply red case
+            if basename_subject == 'A258':
+                pass
+            else:
+                assert not(len(index_yellow[0]) != 0 and len(index_red[0]) != 0)
+                assert not (len(index_yellow[0]) == 0 and len(index_red[0]) == 0)
             # yellow case
             if len(index_yellow[0]) != 0:
                 x_start = index_yellow[1][0]
@@ -63,6 +67,7 @@ for subject in glob.glob(os.path.join(roi_image_path, '*')):
                 y_end = index_yellow[0][-1]
                 y_delta = y_end - y_start
             # red case
+            # since this is performed after yellow case, it handles A258 case fine
             elif len(index_red[0]) != 0:
                 x_start = index_red[1][0]
                 x_end = index_red[1][-1]

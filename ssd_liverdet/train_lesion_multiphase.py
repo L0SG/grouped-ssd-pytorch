@@ -79,7 +79,7 @@ if args.visdom:
 
 """"########## Data Loading & dimension matching ##########"""
 # load custom CT dataset
-datapath = '/home/vision/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
+datapath = '/home/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
 train_sets = [('liver_lesion')]
 
 
@@ -249,15 +249,6 @@ def train():
 
         # load train data
         images, targets = next(batch_iterator)
-        """
-        # percentage jitter seems to cause bug, implemented with absolute pixel instead in augmentation.py
-        # add pixel jitter for targets for data augmentation
-        # it applies random pixel shift (up to 1%) for each element of [x_min, y_min, x_max, y_max] & keep label info
-        for i in range(len(targets)):
-            label_noise = np.random.uniform(-gt_pixel_jitter, gt_pixel_jitter, size=5).astype(np.float32)
-            label_noise[4] = 0
-            targets[i] = torch.add(targets[i], torch.from_numpy(label_noise))
-        """
 
         if args.cuda:
             images = images.cuda().view(images.shape[0], -1, images.shape[3], images.shape[4])
@@ -276,7 +267,7 @@ def train():
             print('Debug mode: printing augmented data...')
             images_print = images.data[:, :, :, :].cpu().numpy()
             images_print[images_print < 0] = 0
-            targets_print = np.array([target.data.cpu().numpy().squeeze()[:4] for target in targets])
+            targets_print = np.array([target.data[0].cpu().numpy().squeeze()[:4] for target in targets])
             targets_print *= images_print.shape[2]
             images_print = images_print.astype(np.uint8)
 
@@ -294,7 +285,7 @@ def train():
                     fig, ax = plt.subplots(1)
                     ax.imshow(output_image, cmap='gray')
                     # green gt box
-                    rect_gt = patches.Rectangle((min_x[idx], min_y[idx]), width[idx], height[idx], linewidth=2, edgecolor='g', facecolor='none')
+                    rect_gt = patches.Rectangle((min_x[idx], min_y[idx]), width[idx], height[idx], linewidth=1, edgecolor='g', facecolor='none')
                     ax.add_patch(rect_gt)
                     plt.savefig(os.path.join(args.save_folder, 'train_' + str(idx) + '_' + str(idx_img) + '.png'))
                     plt.close()

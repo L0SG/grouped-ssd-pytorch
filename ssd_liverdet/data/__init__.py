@@ -6,11 +6,20 @@ import numpy as np
 
 
 def base_transform(image, size, mean):
-    x = cv2.resize(image, (size, size)).astype(np.float32)
-    # x = cv2.resize(np.array(image), (size, size)).astype(np.float32)
-    x -= mean
-    x = x.astype(np.float32)
-    return x
+    if len(image.shape) == 3:
+        x = cv2.resize(image, (size, size)).astype(np.float32)
+        # x = cv2.resize(np.array(image), (size, size)).astype(np.float32)
+        x -= mean
+        x = x.astype(np.float32)
+        return x
+    elif len(image.shape) == 4:
+        x = np.zeros((image.shape[0], size, size, image.shape[3])).astype(np.float32)
+        for idx in range(image.shape[0]):
+            img_phase = cv2.resize(image[idx], (size, size)).astype(np.float32)
+            img_phase -= mean
+            img_phase = img_phase.astype(np.float32)
+            x[idx] = img_phase
+        return x
 
 
 class BaseTransform:
