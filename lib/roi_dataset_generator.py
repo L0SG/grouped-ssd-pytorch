@@ -5,8 +5,9 @@ from PIL import Image
 import dicom
 import pickle
 import h5py
+from scipy.misc import imsave
 
-def preprocess_img_slc_for_detection(img_slc):
+def preprocess_img_slc_for_detection(img_slc, subject):
     """
     modified version of dicom preprocess code from cascaded FCN
     Preprocesses the image 3d volumes by performing the following :
@@ -21,6 +22,21 @@ def preprocess_img_slc_for_detection(img_slc):
     Return:
         Preprocessed image slice
     """
+
+    # some subjects have difference value range: A391 & A452
+    # use exceptional processing for these one
+    if subject == 'A391' or subject == 'A452':
+        img_slc = img_slc.astype(np.float32)
+        img_slc[img_slc > 1200] = 0
+        img_slc = np.clip(img_slc, -100, 400)
+        img_slc = normalize_image(img_slc)
+
+        return img_slc
+
+    if np.amax(img_slc) < 1700:
+        ValueError('ERROR: value range is different for this subject')
+        exit()
+
     img_slc = img_slc.astype(np.float32)
     img_slc = np.add(img_slc, -1024)
     img_slc[img_slc > 1200] = 0
@@ -41,8 +57,8 @@ def generate_roi_dataset(ct_path, roi_coordinate_path):
     ct_data_master = []
     coordinate_data_master = []
 
-    # traverse over subjects
-    for subject in glob.glob(os.path.join(roi_coordinate_path, '*')):
+    # traverse over subjects, sorted
+    for subject in sorted(glob.glob(os.path.join(roi_coordinate_path, '*'))):
         ct_data_subject = []
         coordinate_data_subject = []
 
@@ -50,8 +66,13 @@ def generate_roi_dataset(ct_path, roi_coordinate_path):
         path_subject = os.path.join(ct_path, basename_subject)
         ct_data_oneslice_4phase = []
         coordinate_oneslice_4phase = []
+
+        # for calculating value range of each subject
+        mean_min_value = []
+        mean_max_value = []
+
         # traverse over phases
-        for phase in glob.glob(os.path.join(subject, '*')):
+        for phase in sorted(glob.glob(os.path.join(subject, '*'))):
             basename_phase = os.path.basename(os.path.normpath(phase))
             path_phase = os.path.join(path_subject, basename_phase)
             """
@@ -81,8 +102,13 @@ def generate_roi_dataset(ct_path, roi_coordinate_path):
             for idx in range(len(path_slices_filtered)):
                 ct_file = dicom.read_file(os.path.join(ct_path, basename_subject, basename_phase,
                                                         path_slices_filtered[idx]))
+
                 ct_image = ct_file.pixel_array
-                ct_image_preprocessed = preprocess_img_slc_for_detection(ct_image)
+
+                mean_min_value.append(np.amin(ct_image))
+                mean_max_value.append(np.amax(ct_image))
+
+                ct_image_preprocessed = preprocess_img_slc_for_detection(ct_image, basename_subject)
                 coordinate_file = open(os.path.join(roi_coordinate_path, basename_subject, basename_phase,
                                                         path_coordinates_filtered[idx]), 'rb')
                 coordinate = pickle.load(coordinate_file)
@@ -97,7 +123,6 @@ def generate_roi_dataset(ct_path, roi_coordinate_path):
         # make 3 continuous slides as a single data point to enable the CNN to recognize vertical info
         # consider 3 slides to additional channel (like RGB)
         for idx_slice in range(ct_data_oneslice_4phase.shape[1] - 2):
-
             ct_data_threeslices = np.array(ct_data_oneslice_4phase[:, idx_slice:idx_slice+3, :, :])
             coordinate_threeslices = np.array(coordinate_oneslice_4phase[:, idx_slice:idx_slice+3, :])
             #ct_data_threeslices = np.array(ct_data_oneslice[idx_slice:idx_slice+3])
@@ -105,11 +130,27 @@ def generate_roi_dataset(ct_path, roi_coordinate_path):
             # append to subject list
             ct_data_subject.append(ct_data_threeslices)
             coordinate_data_subject.append(coordinate_threeslices)
+
+        """ for debug """
+        # printout the first preprocessed image per subject
+        if True:
+            printout_subject = (ct_data_subject[0][0][1] * 255).astype(np.uint8)
+            imsave(os.path.join('debug', str(basename_subject) + '.png'), printout_subject)
+
+        mean_min_value = np.array(mean_min_value).mean()
+        mean_max_value = np.array(mean_max_value).mean()
+
+        """ to make debug data with one data per subject, use [0] at this line"""
         ct_data_subject = np.array(ct_data_subject)
         coordinate_data_subject = np.array(coordinate_data_subject)
+
         # append to master list
         ct_data_master.append(ct_data_subject)
         coordinate_data_master.append(coordinate_data_subject)
+
+        print(subject + ' mean val: ' + str(mean_min_value) + ' max val: ' + str(mean_max_value))
+        if mean_min_value < 0 or mean_max_value < 1700:
+            print('WARNING: value range for this subject is out of range, double check the data')
 
     assert len(ct_data_master) == len(coordinate_data_master)
     return ct_data_master, coordinate_data_master

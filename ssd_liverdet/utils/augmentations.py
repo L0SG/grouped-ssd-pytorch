@@ -349,8 +349,9 @@ class RandomSampleCrop(object):
 
 
 class Expand(object):
-    def __init__(self, mean):
+    def __init__(self, mean, ratio):
         self.mean = mean
+        self.ratio = ratio
 
     def __call__(self, image, boxes, labels):
         #if random.randint(2):
@@ -359,7 +360,7 @@ class Expand(object):
         # single-phase case: original
         if len(image.shape) == 3:
             height, width, depth = image.shape
-            ratio = random.uniform(1, 4)
+            ratio = random.uniform(1, self.ratio)
             left = random.uniform(0, width*ratio - width)
             top = random.uniform(0, height*ratio - height)
 
@@ -380,7 +381,7 @@ class Expand(object):
         # multi-channel case: same expansion scheme for each phase
         elif len(image.shape) == 4:
             phase, height, width, depth = image.shape
-            ratio = random.uniform(1, 4)
+            ratio = random.uniform(1, self.ratio)
             left = random.uniform(0, width * ratio - width)
             top = random.uniform(0, height * ratio - height)
 
@@ -472,17 +473,18 @@ class PhotometricDistort(object):
 
 
 class SSDAugmentation(object):
-    def __init__(self, pixeljitter=0.01, size=300, mean=(104, 117, 123)):
+    def __init__(self, pixeljitter=0.01, ratio=1.5, size=300, mean=(104, 117, 123)):
         self.pixeljitter = pixeljitter
         self.mean = mean
         self.size = size
+        self.ratio = ratio
         self.augment = Compose([
             ConvertFromInts(),
             ToAbsoluteCoords(),
             # new augmentation: pixel jitter
             PixelJitter(self.pixeljitter),
             PhotometricDistort(),
-            Expand(self.mean),
+            Expand(self.mean, self.ratio),
             # TODO: consider these augmentations for CT
             # cropping seems to be not good for CT
             RandomSampleCrop(),
@@ -490,7 +492,7 @@ class SSDAugmentation(object):
             RandomMirror(),
             ToPercentCoords(),
             Resize(self.size),
-            SubtractMeans(self.mean)
+            #SubtractMeans(self.mean)
         ])
 
     def __call__(self, img, boxes, labels):

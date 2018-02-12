@@ -69,6 +69,7 @@ momentum = 0.9
 
 # data augmentation hyperparams
 gt_pixel_jitter = 0.01
+expand_ratio = 1.5
 """#########################################################"""
 
 
@@ -79,7 +80,7 @@ if args.visdom:
 
 """"########## Data Loading & dimension matching ##########"""
 # load custom CT dataset
-datapath = '/home/vision/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
+datapath = '/home/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
 train_sets = [('liver_lesion')]
 
 
@@ -105,6 +106,7 @@ def load_lesion_dataset(data_path):
     return ct, coordinate
 
 ct, coord = load_lesion_dataset(datapath)
+
 # ct: [subjects, sample, phase, channel, 512, 512]
 # coord: [subjects, sample, phase, channel, 5], [x_min, y_min, x_max, y_max, 0 (lesion class label)] format
 # make channels last & 0~255 uint8 image
@@ -112,7 +114,7 @@ for idx in range(len(ct)):
     ct[idx] = np.transpose(ct[idx] * 255, [0, 1, 3, 4, 2]).astype(dtype=np.uint8)
     # use only coordinate from the middle slice, ditch the upper & lower ones
     coord[idx] = coord[idx][:, :, 1, :]
-
+    
 # split train & valid set, subject-level (without shuffle)
 ct_train, ct_valid, coord_ssd_train, coord_ssd_valid = train_test_split(ct, coord, test_size=0.1, shuffle=False)
 
@@ -122,6 +124,11 @@ ct_valid = np.vstack(ct_valid)
 coord_ssd_train = np.vstack(coord_ssd_train).astype(np.float64)
 coord_ssd_valid = np.vstack(coord_ssd_valid).astype(np.float64)
 
+"""
+# for debug data with one slice per subject
+ct_train = (np.array(ct).transpose([0, 1, 3, 4, 2]) * 255).astype(np.uint8)
+coord_ssd_train = np.array(coord).astype(np.float64)
+"""
 """#########################################################"""
 
 """#################### Network Definition ####################"""
@@ -136,10 +143,9 @@ if args.resume:
     print('Resuming training, loading {}...'.format(args.resume))
     ssd_net.load_weights(args.resume)
 else:
-    vgg_weights = torch.load(args.save_folder + args.basenet)
+    #vgg_weights = torch.load(args.save_folder + args.basenet)
     print('pretrained weights not loaded: training from scratch...')
     # print('Loading base network...')
-    # ssd_net.vgg.load_state_dict(vgg_weights
 if args.cuda:
     net = net.cuda()
 
@@ -156,7 +162,6 @@ def weights_init(m):
 
 if not args.resume:
     print('Initializing weights...')
-    #ssd_net.vgg.apply(weights_init)
     # initialize newly added layers' weights with xavier method
     ssd_net.extras.apply(weights_init)
     ssd_net.loc.apply(weights_init)
@@ -175,11 +180,9 @@ def train():
     epoch = 0
     print('Loading Dataset...')
     dataset_train = FISHdetection(ct_train, coord_ssd_train,
-                                  SSDAugmentation(gt_pixel_jitter, ssd_dim, means), dataset_name='liver_lesion_train')
+                                  SSDAugmentation(gt_pixel_jitter, expand_ratio, ssd_dim, means), dataset_name='liver_lesion_train')
     dataset_valid = FISHdetection(ct_valid, coord_ssd_valid,
-                                  SSDAugmentation(gt_pixel_jitter, ssd_dim, means), dataset_name='liver_detection_valid')
-    #    dataset_train = VOCDetection(args.voc_root, train_sets, SSDAugmentation(
-#        ssd_dim, means), AnnotationTransform())
+                                  SSDAugmentation(gt_pixel_jitter, expand_ratio, ssd_dim, means), dataset_name='liver_detection_valid')
 
     epoch_size = len(dataset_train) // args.batch_size
     print('Training SSD on', dataset_train.name)
@@ -287,7 +290,7 @@ def train():
                     # green gt box
                     rect_gt = patches.Rectangle((min_x[idx], min_y[idx]), width[idx], height[idx], linewidth=1, edgecolor='g', facecolor='none')
                     ax.add_patch(rect_gt)
-                    plt.savefig(os.path.join(args.save_folder, 'train_' + str(idx) + '_' + str(idx_img) + '.png'))
+                    plt.savefig(os.path.join('debug', 'train_' + str(idx) + '_' + str(idx_img) + '.png'))
                     plt.close()
             exit()
 
