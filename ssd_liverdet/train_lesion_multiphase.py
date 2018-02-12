@@ -26,7 +26,7 @@ parser = argparse.ArgumentParser(description='Single Shot MultiBox Detector Trai
 parser.add_argument('--version', default='v2', help='conv11_2(v2) or pool6(v1) as last layer')
 parser.add_argument('--basenet', default='vgg16_reducedfc.pth', help='pretrained base model')
 parser.add_argument('--jaccard_threshold', default=0.5, type=float, help='Min Jaccard index for matching')
-parser.add_argument('--batch_size', default=64, type=int, help='Batch size for training')
+parser.add_argument('--batch_size', default=32, type=int, help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str, help='Resume from checkpoint')
 parser.add_argument('--num_workers', default=4, type=int, help='Number of workers used in dataloading')
 # parser.add_argument('--iterations', default=120000, type=int, help='Number of training iterations')
@@ -156,7 +156,7 @@ def weights_init(m):
 
 if not args.resume:
     print('Initializing weights...')
-    ssd_net.vgg.apply(weights_init)
+    #ssd_net.vgg.apply(weights_init)
     # initialize newly added layers' weights with xavier method
     ssd_net.extras.apply(weights_init)
     ssd_net.loc.apply(weights_init)

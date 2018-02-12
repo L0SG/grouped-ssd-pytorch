@@ -6,6 +6,9 @@ from layers import *
 from data import v2_custom
 import os
 
+GROUPS_VGG = 4
+GROUPS_EXTRA = 4
+
 class SSD(nn.Module):
     """Single Shot Multibox Architecture
     The network is composed of a base VGG network followed by the
@@ -132,15 +135,15 @@ def vgg(cfg, i, batch_norm=False):
             layers += [nn.MaxPool2d(kernel_size=2, stride=2, ceil_mode=True)]
         else:
             # depthwise separable conv: add groups=4 (4 phases)
-            conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
+            conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1, groups=GROUPS_VGG)
             if batch_norm:
                 layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
             else:
                 layers += [conv2d, nn.ReLU(inplace=True)]
             in_channels = v
     pool5 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
-    conv6 = nn.Conv2d(512, 1024, kernel_size=3, padding=6, dilation=6)
-    conv7 = nn.Conv2d(1024, 1024, kernel_size=1)
+    conv6 = nn.Conv2d(512, 1024, kernel_size=3, padding=6, dilation=6, groups=GROUPS_VGG)
+    conv7 = nn.Conv2d(1024, 1024, kernel_size=1, groups=GROUPS_VGG)
     layers += [pool5, conv6,
                nn.ReLU(inplace=True), conv7, nn.ReLU(inplace=True)]
     return layers
@@ -155,9 +158,9 @@ def add_extras(cfg, i, batch_norm=False):
         if in_channels != 'S':
             if v == 'S':
                 layers += [nn.Conv2d(in_channels, cfg[k + 1],
-                           kernel_size=(1, 3)[flag], stride=2, padding=1)]
+                           kernel_size=(1, 3)[flag], stride=2, padding=1, groups=GROUPS_EXTRA)]
             else:
-                layers += [nn.Conv2d(in_channels, v, kernel_size=(1, 3)[flag])]
+                layers += [nn.Conv2d(in_channels, v, kernel_size=(1, 3)[flag], groups=GROUPS_EXTRA)]
             flag = not flag
         in_channels = v
     return layers
@@ -190,7 +193,9 @@ extras = {
     '512': [],
 }
 mbox = {
-    '300': [4, 6, 6, 6, 4, 4],  # number of boxes per feature map location
+    #'300': [4, 6, 6, 6, 4, 4],  # number of boxes per feature map location
+    # for v2_custom cfg: use 6 for lowest layer
+    '300': [6, 6, 6, 6, 4, 4],
     '512': [],
 }
 
