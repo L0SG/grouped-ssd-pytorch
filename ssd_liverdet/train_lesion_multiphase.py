@@ -57,13 +57,13 @@ if not os.path.exists(args.save_folder):
 ssd_dim = 300  # only support 300 now
 # current CT dataset has mean pixel val of 33.5
 means = (34, 34, 34)
-num_classes = 2 # lesion or background
+num_classes = 2 # lesion or b1ackground
 batch_size = args.batch_size
 #accum_batch_size = 32
 #iter_size = accum_batch_size / batch_size
-max_iter = 120000
+max_iter = 50000
 weight_decay = 0.0005
-stepvalues = (80000, 100000, 120000)
+stepvalues = (20000, 30000, 40000)
 gamma = 0.1
 momentum = 0.9
 
