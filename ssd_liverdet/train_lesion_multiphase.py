@@ -26,7 +26,7 @@ parser = argparse.ArgumentParser(description='Single Shot MultiBox Detector Trai
 parser.add_argument('--version', default='v2', help='conv11_2(v2) or pool6(v1) as last layer')
 parser.add_argument('--basenet', default='vgg16_reducedfc.pth', help='pretrained base model')
 parser.add_argument('--jaccard_threshold', default=0.5, type=float, help='Min Jaccard index for matching')
-parser.add_argument('--batch_size', default=32, type=int, help='Batch size for training')
+parser.add_argument('--batch_size', default=64, type=int, help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str, help='Resume from checkpoint')
 parser.add_argument('--num_workers', default=4, type=int, help='Number of workers used in dataloading')
 # parser.add_argument('--iterations', default=120000, type=int, help='Number of training iterations')
@@ -57,7 +57,7 @@ if not os.path.exists(args.save_folder):
 ssd_dim = 300  # only support 300 now
 # current CT dataset has mean pixel val of 33.5
 means = (34, 34, 34)
-num_classes = 2 # lesion or b1ackground
+num_classes = 2 # lesion or background
 batch_size = args.batch_size
 #accum_batch_size = 32
 #iter_size = accum_batch_size / batch_size
