@@ -134,10 +134,12 @@ class Resize(object):
         self.size = size
 
     def __call__(self, image, boxes=None, labels=None):
+
         if len(image.shape) == 3:
             image = cv2.resize(image, (self.size,
                                      self.size))
             return image, boxes, labels
+
         elif len(image.shape) == 4:
             image_resized = np.zeros([image.shape[0], self.size, self.size, image.shape[3]], dtype=image.dtype)
             for idx in range(image.shape[0]):
@@ -492,7 +494,7 @@ class SSDAugmentation(object):
             RandomMirror(),
             ToPercentCoords(),
             Resize(self.size),
-            #SubtractMeans(self.mean)
+            SubtractMeans(self.mean)
         ])
 
     def __call__(self, img, boxes, labels):

@@ -11,7 +11,7 @@ import torch.utils.data as data
 from data import FISHdetection, detection_collate, v2, v1
 from utils.augmentations import SSDAugmentation
 from layers.modules import MultiBoxLoss
-from ssd_multiphase_custom import build_ssd
+from ssd_multiphase_custom_512 import build_ssd
 import numpy as np
 import time
 import h5py
@@ -54,7 +54,7 @@ if not os.path.exists(args.save_folder):
     os.mkdir(args.save_folder)
 
 """#################### Hyperparameters ####################"""
-ssd_dim = 300  # only support 300 now
+ssd_dim = 512
 # current CT dataset has mean pixel val of 33.5
 means = (34, 34, 34)
 num_classes = 2 # lesion or background
@@ -132,7 +132,7 @@ coord_ssd_train = np.array(coord).astype(np.float64)
 """#########################################################"""
 
 """#################### Network Definition ####################"""
-ssd_net = build_ssd('train', 300, num_classes)
+ssd_net = build_ssd('train', 512, num_classes)
 net = ssd_net
 
 if args.cuda:
