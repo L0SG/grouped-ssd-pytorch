@@ -66,6 +66,8 @@ weight_decay = 0.0005
 stepvalues = (20000, 30000, 40000)
 gamma = 0.1
 momentum = 0.9
+# use batchnorm for vgg
+batch_norm = True
 
 # data augmentation hyperparams
 gt_pixel_jitter = 0.01
@@ -124,6 +126,7 @@ ct_valid = np.vstack(ct_valid)
 coord_ssd_train = np.vstack(coord_ssd_train).astype(np.float64)
 coord_ssd_valid = np.vstack(coord_ssd_valid).astype(np.float64)
 
+print(ct_train.shape, ct_valid.shape)
 """
 # for debug data with one slice per subject
 ct_train = (np.array(ct).transpose([0, 1, 3, 4, 2]) * 255).astype(np.uint8)
@@ -132,7 +135,7 @@ coord_ssd_train = np.array(coord).astype(np.float64)
 """#########################################################"""
 
 """#################### Network Definition ####################"""
-ssd_net = build_ssd('train', 300, num_classes)
+ssd_net = build_ssd('train', 300, num_classes, batch_norm=batch_norm)
 net = ssd_net
 
 if args.cuda:
@@ -377,7 +380,7 @@ def train():
         # save checkpoint
         if iteration % 5000 == 0:
             print('Saving state, iter:', iteration)
-            torch.save(ssd_net.state_dict(), 'weights/ssd300_vgggroup_' +
+            torch.save(ssd_net.state_dict(), 'weights/ssd300_allgroup_vanilla_BN' +
                        repr(iteration) + '.pth')
     torch.save(ssd_net.state_dict(), args.save_folder + '' + args.version + '.pth')
 

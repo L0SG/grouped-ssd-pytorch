@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 from layers import *
-from data import v2_custom
+from data import v2
 import os
 
 GROUPS_VGG = 4
@@ -17,7 +17,7 @@ class SSD(nn.Module):
         2) conv2d for localization predictions
         3) associated priorbox layer to produce default bounding
            boxes specific to the layer's feature map size.
-    See: https://arxiv.org/pdf/1512.02325.pdf for more details.
+    See: https://arxiv.org/pdf/151 2.02325.pdf for more details.
 
     Args:
         phase: (string) Can be "test" or "train"
@@ -26,12 +26,13 @@ class SSD(nn.Module):
         head: "multibox head" consists of loc and conf conv layers
     """
 
-    def __init__(self, phase, base, extras, head, num_classes):
+    def __init__(self, phase, base, extras, head, num_classes, batch_norm):
         super(SSD, self).__init__()
         self.phase = phase
         self.num_classes = num_classes
+        self.batch_norm = batch_norm
         # TODO: implement __call__ in PriorBox
-        self.priorbox = PriorBox(v2_custom)
+        self.priorbox = PriorBox(v2)
         self.priors = Variable(self.priorbox.forward(), volatile=True)
         self.size = 300
 
@@ -73,7 +74,12 @@ class SSD(nn.Module):
         conf = list()
 
         # apply vgg up to conv4_3 relu
-        for k in range(23):
+        # TODO: change hardcoding 23 for BN case
+        if self.batch_norm is False:
+            idx_until_conv4_3 = 23
+        elif self.batch_norm is True:
+            idx_until_conv4_3 = 33
+        for k in range(idx_until_conv4_3):
             x = self.vgg[k](x)
 
         s = self.L2Norm(x)
@@ -81,7 +87,7 @@ class SSD(nn.Module):
         sources.append(s)
 
         # apply vgg up to fc7
-        for k in range(23, len(self.vgg)):
+        for k in range(idx_until_conv4_3, len(self.vgg)):
             x = self.vgg[k](x)
         sources.append(x)
 
@@ -149,7 +155,7 @@ def vgg(cfg, i, batch_norm=False):
     return layers
 
 
-def add_extras(cfg, i, batch_norm=False):
+def add_extras(cfg, i):
     # Extra layers added to VGG for feature scaling
     layers = []
     in_channels = i
@@ -195,12 +201,12 @@ extras = {
 mbox = {
     #'300': [4, 6, 6, 6, 4, 4],  # number of boxes per feature map location
     # for v2_custom cfg: use 6 for lowest layer
-    '300': [6, 6, 6, 6, 4, 4],
+    '300': [4, 6, 6, 6, 4, 4],
     '512': [],
 }
 
 
-def build_ssd(phase, size=300, num_classes=21):
+def build_ssd(phase, size=300, num_classes=21, batch_norm=False):
     if phase != "test" and phase != "train":
         print("Error: Phase not recognized")
         return
@@ -209,6 +215,6 @@ def build_ssd(phase, size=300, num_classes=21):
         return
 
     # change the input channel from i=3 to 12
-    return SSD(phase, *multibox(vgg(base[str(size)], i=12),
+    return SSD(phase, *multibox(vgg(base[str(size)], i=12, batch_norm=batch_norm),
                                 add_extras(extras[str(size)], 1024),
-                                mbox[str(size)], num_classes), num_classes)
+                                mbox[str(size)], num_classes), num_classes, batch_norm)

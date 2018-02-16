@@ -66,6 +66,8 @@ weight_decay = 0.0005
 stepvalues = (20000, 30000, 40000)
 gamma = 0.1
 momentum = 0.9
+# use batchnorm for vgg
+batch_norm = True
 
 # data augmentation hyperparams
 gt_pixel_jitter = 0.01
@@ -132,7 +134,7 @@ coord_ssd_train = np.array(coord).astype(np.float64)
 """#########################################################"""
 
 """#################### Network Definition ####################"""
-ssd_net = build_ssd('train', 512, num_classes)
+ssd_net = build_ssd('train', 512, num_classes, batch_norm=batch_norm)
 net = ssd_net
 
 if args.cuda:

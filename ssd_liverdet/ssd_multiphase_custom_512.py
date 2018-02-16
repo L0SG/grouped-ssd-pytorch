@@ -26,10 +26,11 @@ class SSD(nn.Module):
         head: "multibox head" consists of loc and conf conv layers
     """
 
-    def __init__(self, phase, base, extras, head, num_classes):
+    def __init__(self, phase, base, extras, head, num_classes, batch_norm):
         super(SSD, self).__init__()
         self.phase = phase
         self.num_classes = num_classes
+        self.batch_norm = batch_norm
         # TODO: implement __call__ in PriorBox
         self.priorbox = PriorBox(v2_custom_512)
         self.priors = Variable(self.priorbox.forward(), volatile=True)
@@ -73,7 +74,12 @@ class SSD(nn.Module):
         conf = list()
 
         # apply vgg up to conv4_3 relu
-        for k in range(23):
+        # TODO: change hardcoding 23 for BN case
+        if self.batch_norm is False:
+            idx_until_conv4_3 = 23
+        elif self.batch_norm is True:
+            idx_until_conv4_3 = 33
+        for k in range(idx_until_conv4_3):
             x = self.vgg[k](x)
 
         s = self.L2Norm(x)
@@ -81,7 +87,7 @@ class SSD(nn.Module):
         sources.append(s)
 
         # apply vgg up to fc7
-        for k in range(23, len(self.vgg)):
+        for k in range(idx_until_conv4_3, len(self.vgg)):
             x = self.vgg[k](x)
         sources.append(x)
 
@@ -149,7 +155,7 @@ def vgg(cfg, i, batch_norm=False):
     return layers
 
 
-def add_extras(cfg, size, i, batch_norm=False):
+def add_extras(cfg, size, i):
     # Extra layers added to VGG for feature scaling
     layers = []
     in_channels = i
@@ -204,12 +210,12 @@ mbox = {
 }
 
 
-def build_ssd(phase, size=300, num_classes=21):
+def build_ssd(phase, size=300, num_classes=21, batch_norm=False):
     if phase != "test" and phase != "train":
         print("Error: Phase not recognized")
         return
 
     # change the input channel from i=3 to 12
-    return SSD(phase, *multibox(vgg(base[str(size)], i=12),
+    return SSD(phase, *multibox(vgg(base[str(size)], i=12, batch_norm=batch_norm),
                                 add_extras(extras[str(size)], size, 1024),
                                 mbox[str(size)], num_classes), num_classes)
