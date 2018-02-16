@@ -218,4 +218,4 @@ def build_ssd(phase, size=300, num_classes=21, batch_norm=False):
     # change the input channel from i=3 to 12
     return SSD(phase, *multibox(vgg(base[str(size)], i=12, batch_norm=batch_norm),
                                 add_extras(extras[str(size)], size, 1024),
-                                mbox[str(size)], num_classes), num_classes)
+                                mbox[str(size)], num_classes), num_classes, batch_norm)
