@@ -92,10 +92,19 @@ class SSD(nn.Module):
         sources.append(x)
 
         # apply extra layers and cache source layer outputs
-        for k, v in enumerate(self.extras):
-            x = F.relu(v(x), inplace=True)
-            if k % 2 == 1:
-                sources.append(x)
+        # hard-coded for BN case
+        if self.batch_norm is False:
+            for k, v in enumerate(self.extras):
+                x = F.relu(v(x), inplace=True)
+                if k % 2 == 1:
+                    sources.append(x)
+        elif self.batch_norm is True:
+            for k, v in enumerate(self.extras):
+                x = v(x)
+                if k % 2 == 1:
+                    x = F.relu(x, inplace=True)
+                if k % 4 == 3:
+                    sources.append(x)
 
         # apply multibox head to source layers
         for (x, l, c) in zip(sources, self.loc, self.conf):
@@ -155,7 +164,7 @@ def vgg(cfg, i, batch_norm=False):
     return layers
 
 
-def add_extras(cfg, size, i):
+def add_extras(cfg, size, i, batch_norm=False):
     # Extra layers added to VGG for feature scaling
     layers = []
     in_channels = i
@@ -163,10 +172,20 @@ def add_extras(cfg, size, i):
     for k, v in enumerate(cfg):
         if in_channels != 'S':
             if v == 'S':
-                layers += [nn.Conv2d(in_channels, cfg[k + 1],
+                if batch_norm is False:
+                    layers += [nn.Conv2d(in_channels, cfg[k + 1],
                            kernel_size=(1, 3)[flag], stride=2, padding=1, groups=GROUPS_EXTRA)]
+                else:
+                    layers += [nn.Conv2d(in_channels, cfg[k + 1],
+                                         kernel_size=(1, 3)[flag], stride=2, padding=1, groups=GROUPS_EXTRA),
+                               nn.BatchNorm2d(cfg[k + 1])]
+
             else:
-                layers += [nn.Conv2d(in_channels, v, kernel_size=(1, 3)[flag], groups=GROUPS_EXTRA)]
+                if batch_norm is False:
+                    layers += [nn.Conv2d(in_channels, v, kernel_size=(1, 3)[flag], groups=GROUPS_EXTRA)]
+                else:
+                    layers += [nn.Conv2d(in_channels, v, kernel_size=(1, 3)[flag], groups=GROUPS_EXTRA),
+                               nn.BatchNorm2d(v)]
             flag = not flag
         in_channels = v
     # SSD512 need add one more Conv layer(Conv12_2)
@@ -175,20 +194,33 @@ def add_extras(cfg, size, i):
     return layers
 
 
-def multibox(vgg, extra_layers, cfg, num_classes):
+def multibox(vgg, extra_layers, cfg, num_classes, batch_norm):
     loc_layers = []
     conf_layers = []
-    vgg_source = [24, -2]
+    # hard-coded
+    # TODO: make this generic
+    if batch_norm is False:
+        vgg_source = [24, -2]
+    elif batch_norm is True:
+        vgg_source = [34, -2]
     for k, v in enumerate(vgg_source):
         loc_layers += [nn.Conv2d(vgg[v].out_channels,
                                  cfg[k] * 4, kernel_size=3, padding=1)]
         conf_layers += [nn.Conv2d(vgg[v].out_channels,
                         cfg[k] * num_classes, kernel_size=3, padding=1)]
-    for k, v in enumerate(extra_layers[1::2], 2):
-        loc_layers += [nn.Conv2d(v.out_channels, cfg[k]
-                                 * 4, kernel_size=3, padding=1)]
-        conf_layers += [nn.Conv2d(v.out_channels, cfg[k]
-                                  * num_classes, kernel_size=3, padding=1)]
+    # hard-coded
+    if batch_norm is False:
+        for k, v in enumerate(extra_layers[1::2], 2):
+            loc_layers += [nn.Conv2d(v.out_channels, cfg[k]
+                                     * 4, kernel_size=3, padding=1)]
+            conf_layers += [nn.Conv2d(v.out_channels, cfg[k]
+                                      * num_classes, kernel_size=3, padding=1)]
+    elif batch_norm is True:
+        for k, v in enumerate(extra_layers[2::4], 2):
+            loc_layers += [nn.Conv2d(v.out_channels, cfg[k]
+                                     * 4, kernel_size=3, padding=1)]
+            conf_layers += [nn.Conv2d(v.out_channels, cfg[k]
+                                      * num_classes, kernel_size=3, padding=1)]
     return vgg, extra_layers, (loc_layers, conf_layers)
 
 
@@ -217,5 +249,5 @@ def build_ssd(phase, size=300, num_classes=21, batch_norm=False):
 
     # change the input channel from i=3 to 12
     return SSD(phase, *multibox(vgg(base[str(size)], i=12, batch_norm=batch_norm),
-                                add_extras(extras[str(size)], size, 1024),
-                                mbox[str(size)], num_classes), num_classes, batch_norm)
+                                add_extras(extras[str(size)], size, 1024, batch_norm),
+                                mbox[str(size)], num_classes, batch_norm), num_classes, batch_norm)
