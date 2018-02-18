@@ -252,6 +252,11 @@ def train():
             conf_loss = 0
             epoch += 1
 
+        if iteration == 1500:
+            # Freeze the conf layers after some iters to prevent overfitting
+            for conf_param in net.module.conf.parameters():
+                conf_param.requires_grad = False
+
         # load train data
         images, targets = next(batch_iterator)
 

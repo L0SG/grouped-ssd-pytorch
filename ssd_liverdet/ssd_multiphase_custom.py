@@ -17,7 +17,7 @@ class SSD(nn.Module):
         2) conv2d for localization predictions
         3) associated priorbox layer to produce default bounding
            boxes specific to the layer's feature map size.
-    See: https://arxiv.org/pdf/151 2.02325.pdf for more details.
+    See: https://arxiv.org/pdf/1512.02325.pdf for more details.
 
     Args:
         phase: (string) Can be "test" or "train"
