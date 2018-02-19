@@ -398,11 +398,11 @@ def train():
         # validation phase for each several train iter
         if iteration % 100 == 0 and iteration > 10:
             del images, targets
-            net.eval()
+            for idx in range(cross_validation):
+                net_cv[idx].eval()
             loss_l_val, loss_c_val, loss_val = 0., 0., 0.
 
             for idx_c in range(cross_validation):
-
                 batch_iterator_val = iter(data_loader_valid[idx_c])
                 for idx in range(len(batch_iterator_val)):
                     img_val, tar_val = next(batch_iterator_val)
