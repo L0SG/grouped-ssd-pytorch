@@ -467,9 +467,10 @@ def train():
         # save checkpoint
         if iteration % 5000 == 0:
             print('Saving state, iter:', iteration)
-            torch.save(ssd_net.state_dict(), 'weights/ssd300_allgroup_vanilla_BN' +
-                       repr(iteration) + '.pth')
-    torch.save(ssd_net.state_dict(), args.save_folder + '' + args.version + '.pth')
+            for idx in range(cross_validation):
+                torch.save(net[idx].state_dict(), 'weights/ssd300_allgroup_vanilla_BN_CV' + str(idx) + '_' +
+                           repr(iteration) + '.pth')
+    # torch.save(net[idx].state_dict(), args.save_folder + '' + args.version + '.pth')
 
 
 def adjust_learning_rate(optimizer, gamma, step):
