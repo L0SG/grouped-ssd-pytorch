@@ -438,7 +438,7 @@ def train():
                 )
             del img_val, tar_val
             # write valid log
-            f_valid.write(str(iteration)+'\t'+str(loss_val)+'\t'+str(loss_l_val)+'\t'+str(loss_c_val)+'\n')
+            f_valid.write(str(iteration)+'\t'+str(loss_val.data[0])+'\t'+str(loss_l_val.data[0])+'\t'+str(loss_c_val.data[0])+'\n')
             f_valid.flush()
 
         # visdom train plot
@@ -468,7 +468,7 @@ def train():
         if iteration % 5000 == 0:
             print('Saving state, iter:', iteration)
             for idx in range(cross_validation):
-                torch.save(net[idx].state_dict(), 'weights/ssd512_allgroup_custom_BN_CV' + str(idx) + '_' +
+                torch.save(net_cv[idx].state_dict(), 'weights/ssd512_allgroup_custom_BN_CV' + str(idx) + '_' +
                            repr(iteration) + '.pth')
     # torch.save(net[idx].state_dict(), args.save_folder + '' + args.version + '.pth')
 
