@@ -15,7 +15,8 @@ from ssd_multiphase_custom_512 import build_ssd
 import numpy as np
 import time
 import h5py
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, KFold
+import copy
 
 def str2bool(v):
     return v.lower() in ("yes", "true", "t", "1")
@@ -28,7 +29,7 @@ parser.add_argument('--basenet', default='vgg16_reducedfc.pth', help='pretrained
 parser.add_argument('--jaccard_threshold', default=0.5, type=float, help='Min Jaccard index for matching')
 parser.add_argument('--batch_size', default=64, type=int, help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str, help='Resume from checkpoint')
-parser.add_argument('--num_workers', default=4, type=int, help='Number of workers used in dataloading')
+parser.add_argument('--num_workers', default=2, type=int, help='Number of workers used in dataloading')
 # parser.add_argument('--iterations', default=120000, type=int, help='Number of training iterations')
 parser.add_argument('--start_iter', default=0, type=int, help='Begin counting iterations starting from this value (should be used with resume)')
 parser.add_argument('--cuda', default=True, type=str2bool, help='Use cuda to train model')
@@ -66,12 +67,15 @@ weight_decay = 0.0005
 stepvalues = (20000, 30000, 40000)
 gamma = 0.1
 momentum = 0.9
-# use batchnorm for vgg
+# use batchnorm for vgg & extras
 batch_norm = True
 
 # data augmentation hyperparams
 gt_pixel_jitter = 0.01
 expand_ratio = 1.5
+
+# CV hyperparams
+cross_validation = 5
 """#########################################################"""
 
 
@@ -116,16 +120,35 @@ for idx in range(len(ct)):
     ct[idx] = np.transpose(ct[idx] * 255, [0, 1, 3, 4, 2]).astype(dtype=np.uint8)
     # use only coordinate from the middle slice, ditch the upper & lower ones
     coord[idx] = coord[idx][:, :, 1, :]
-    
+
+""" use CV instead   
 # split train & valid set, subject-level (without shuffle)
 ct_train, ct_valid, coord_ssd_train, coord_ssd_valid = train_test_split(ct, coord, test_size=0.1, shuffle=False)
+"""
+
+# 5-fold CV
+kf = KFold(n_splits=cross_validation)
+kf.get_n_splits(ct, coord)
 
 # flatten the subject & sample dimension for each sets by stacking
-ct_train = np.vstack(ct_train)
-ct_valid = np.vstack(ct_valid)
-coord_ssd_train = np.vstack(coord_ssd_train).astype(np.float64)
-coord_ssd_valid = np.vstack(coord_ssd_valid).astype(np.float64)
+ct_train = []
+ct_valid = []
+coord_ssd_train = []
+coord_ssd_valid = []
+for train_index, valid_index in kf.split(ct):
+    ct_train_part = [ct[x] for ind, x in enumerate(train_index)]
+    ct_valid_part = [ct[x] for ind, x in enumerate(valid_index)]
+    coord_train_part = [coord[x] for ind, x in enumerate(train_index)]
+    coord_valid_part = [coord[x] for ind, x in enumerate(valid_index)]
 
+    ct_train.append(np.vstack(ct_train_part))
+    ct_valid.append(np.vstack(ct_valid_part))
+    coord_ssd_train.append(np.vstack(coord_train_part).astype(np.float64))
+    coord_ssd_valid.append(np.vstack(coord_valid_part).astype(np.float64))
+
+print('using 5-fold CV...')
+for idx in range(cross_validation):
+    print(ct_train[idx].shape, ct_valid[idx].shape)
 """
 # for debug data with one slice per subject
 ct_train = (np.array(ct).transpose([0, 1, 3, 4, 2]) * 255).astype(np.uint8)
@@ -169,11 +192,23 @@ if not args.resume:
     ssd_net.loc.apply(weights_init)
     ssd_net.conf.apply(weights_init)
 
-optimizer = optim.SGD(net.parameters(), lr=args.lr,
-                      momentum=args.momentum, weight_decay=args.weight_decay)
-criterion = MultiBoxLoss(num_classes, 0.5, True, 0, True, 3, 0.5, False, args.cuda)
+# for 5-fold CV, define 5 copies of the model and optimizer
+print('copying models & optimizers for CV...')
+net_cv = []
+optimizer_cv = []
+for idx in range(cross_validation):
+    net_cv.append(copy.deepcopy(net))
+    optimizer_cv.append(optim.SGD(net_cv[idx].parameters(), lr=args.lr,
+                                  momentum=args.momentum, weight_decay=args.weight_decay))
+criterion = MultiBoxLoss(num_classes, 0.5, True, 0, True, 1, 0.5, False, args.cuda)
+del net
 """#########################################################"""
 
+# create train & valid log text file
+f_train = open('train_log.txt', 'w')
+f_train.write('iteration\tloss\tloc_loss\tconf_loss\n')
+f_valid = open('valid_log.txt', 'w')
+f_valid.write('iteration\tloss\tloc_loss\tconf_loss\n')
 
 def train():
     # loss counters
@@ -181,13 +216,22 @@ def train():
     conf_loss = 0
     epoch = 0
     print('Loading Dataset...')
-    dataset_train = FISHdetection(ct_train, coord_ssd_train,
-                                  SSDAugmentation(gt_pixel_jitter, expand_ratio, ssd_dim, means), dataset_name='liver_lesion_train')
-    dataset_valid = FISHdetection(ct_valid, coord_ssd_valid,
-                                  SSDAugmentation(gt_pixel_jitter, expand_ratio, ssd_dim, means), dataset_name='liver_detection_valid')
+    dataset_train = []
+    dataset_valid = []
+    # create 5-fold CV datasets
+    for idx in range(cross_validation):
+        dataset_train.append(FISHdetection(ct_train[idx], coord_ssd_train[idx],
+                                      SSDAugmentation(gt_pixel_jitter, expand_ratio, ssd_dim, means), dataset_name='liver_lesion_train' + str(idx)))
+        dataset_valid.append(FISHdetection(ct_valid[idx], coord_ssd_valid[idx],
+                                      SSDAugmentation(gt_pixel_jitter, expand_ratio, ssd_dim, means), dataset_name='liver_detection_valid' + str(idx)))
 
-    epoch_size = len(dataset_train) // args.batch_size
-    print('Training SSD on', dataset_train.name)
+    # hard-define the epoch size to the minimum of set in CV: minimal impact
+    epoch_size = []
+    for idx in range(cross_validation):
+        epoch_size.append(len(dataset_train[idx]) // args.batch_size)
+    epoch_size = min(epoch_size)
+
+    print('Training SSD on 5-fold CV set...')
     step_index = 0
 
     # visdom plot
@@ -213,6 +257,7 @@ def train():
                 legend=['Loc Loss', 'Conf Loss', 'Loss']
             )
         )
+        """
         epoch_lot = viz.line(
             X=torch.zeros((1,)).cpu(),
             Y=torch.zeros((1, 3)).cpu(),
@@ -223,21 +268,31 @@ def train():
                 legend=['Loc Loss', 'Conf Loss', 'Loss']
             )
         )
+        """
 
     batch_iterator = None
-    data_loader_train = data.DataLoader(dataset_train, batch_size, num_workers=args.num_workers,
-                                  shuffle=True, collate_fn=detection_collate, pin_memory=True)
-    data_loader_valid = data.DataLoader(dataset_valid, batch_size, num_workers=args.num_workers,
-                                        shuffle=True, collate_fn=detection_collate, pin_memory=True)
+
+    data_loader_train = []
+    data_loader_valid = []
+    for idx in range(cross_validation):
+        data_loader_train.append(data.DataLoader(dataset_train[idx], batch_size, num_workers=args.num_workers,
+                                      shuffle=True, collate_fn=detection_collate, pin_memory=True))
+        data_loader_valid.append(data.DataLoader(dataset_valid[idx], batch_size, num_workers=args.num_workers,
+                                            shuffle=True, collate_fn=detection_collate, pin_memory=True))
 
     for iteration in range(args.start_iter, max_iter):
-        net.train()
+        for idx in range(cross_validation):
+            net_cv[idx].train()
         if (not batch_iterator) or (iteration % epoch_size == 0):
             # create batch iterator
-            batch_iterator = iter(data_loader_train)
+            batch_iterator = []
+            for idx in range(cross_validation):
+                batch_iterator.append(iter(data_loader_train[idx]))
         if iteration in stepvalues:
             step_index += 1
-            adjust_learning_rate(optimizer, args.gamma, step_index)
+            for idx in range(cross_validation):
+                adjust_learning_rate(optimizer_cv[idx], args.gamma, step_index)
+            """
             if args.visdom:
                 viz.line(
                     X=torch.ones((1, 3)).cpu() * epoch,
@@ -246,119 +301,145 @@ def train():
                     win=epoch_lot,
                     update='append'
                 )
-
+            """
+            """
             # reset epoch loss counters
             loc_loss = 0
             conf_loss = 0
+            """
             epoch += 1
 
         if iteration == 1500:
-            # Freeze the conf layers after some iters to prevent overfitting
-            for conf_param in net.module.conf.parameters():
-                conf_param.requires_grad = False
+            for idx in range(cross_validation):
+                # Freeze the conf layers after some iters to prevent overfitting
+                for conf_param in net_cv[idx].module.conf.parameters():
+                    conf_param.requires_grad = False
 
         # load train data
-        images, targets = next(batch_iterator)
+        loss_cv = 0.
+        loc_loss_cv = 0.
+        conf_loss_cv = 0.
 
-        if args.cuda:
-            images = images.cuda().view(images.shape[0], -1, images.shape[3], images.shape[4])
-            images = Variable(images)
-            targets = [Variable(anno.cuda(), volatile=True) for anno in targets]
-        else:
-            images = images.view(images.shape[0], -1, images.shape[3], images.shape[4])
-            images = Variable(images)
-            targets = [Variable(anno, volatile=True) for anno in targets]
+        for idx in range(cross_validation):
+            images, targets = next(batch_iterator[idx])
 
-        """ DEBUG CODE: printout augmented images & targets"""
-        if False:
-            import matplotlib.pyplot as plt
-            import matplotlib.patches as patches
-            from PIL import Image
-            print('Debug mode: printing augmented data...')
-            images_print = images.data[:, :, :, :].cpu().numpy()
-            images_print[images_print < 0] = 0
-            targets_print = np.array([target.data[0].cpu().numpy().squeeze()[:4] for target in targets])
-            targets_print *= images_print.shape[2]
-            images_print = images_print.astype(np.uint8)
+            if args.cuda:
+                images = images.cuda().view(images.shape[0], -1, images.shape[3], images.shape[4])
+                images = Variable(images)
+                targets = [Variable(anno.cuda(), volatile=True) for anno in targets]
+            else:
+                images = images.view(images.shape[0], -1, images.shape[3], images.shape[4])
+                images = Variable(images)
+                targets = [Variable(anno, volatile=True) for anno in targets]
 
-            # center format to min-max format
-            min_x, min_y, max_x, max_y = targets_print[:, 0], targets_print[:, 1], targets_print[:, 2], targets_print[:, 3]
-            width = (max_x - min_x).astype(np.int32)
-            height = (max_y - min_y).astype(np.int32)
-            min_x = min_x.astype(np.int32)
-            min_y = min_y.astype(np.int32)
+            """ DEBUG CODE: printout augmented images & targets"""
+            if False:
+                import matplotlib.pyplot as plt
+                import matplotlib.patches as patches
+                from PIL import Image
+                print('Debug mode: printing augmented data...')
+                images_print = images.data[:, :, :, :].cpu().numpy()
+                images_print[images_print < 0] = 0
+                targets_print = np.array([target.data[0].cpu().numpy().squeeze()[:4] for target in targets])
+                targets_print *= images_print.shape[2]
+                images_print = images_print.astype(np.uint8)
 
-            for idx in range(images_print.shape[0]):
-                for idx_img in range(images_print.shape[1]):
-                    # visualization: draw gt & predicted bounding box and save to image
-                    output_image = images_print[idx, idx_img]
-                    fig, ax = plt.subplots(1)
-                    ax.imshow(output_image, cmap='gray')
-                    # green gt box
-                    rect_gt = patches.Rectangle((min_x[idx], min_y[idx]), width[idx], height[idx], linewidth=1, edgecolor='g', facecolor='none')
-                    ax.add_patch(rect_gt)
-                    plt.savefig(os.path.join('debug', 'train_' + str(idx) + '_' + str(idx_img) + '.png'))
-                    plt.close()
-            exit()
+                # center format to min-max format
+                min_x, min_y, max_x, max_y = targets_print[:, 0], targets_print[:, 1], targets_print[:, 2], targets_print[:, 3]
+                width = (max_x - min_x).astype(np.int32)
+                height = (max_y - min_y).astype(np.int32)
+                min_x = min_x.astype(np.int32)
+                min_y = min_y.astype(np.int32)
 
-        # forward
-        t0 = time.time()
-        out = net(images)
+                for idx in range(images_print.shape[0]):
+                    for idx_img in range(images_print.shape[1]):
+                        # visualization: draw gt & predicted bounding box and save to image
+                        output_image = images_print[idx, idx_img]
+                        fig, ax = plt.subplots(1)
+                        ax.imshow(output_image, cmap='gray')
+                        # green gt box
+                        rect_gt = patches.Rectangle((min_x[idx], min_y[idx]), width[idx], height[idx], linewidth=1, edgecolor='g', facecolor='none')
+                        ax.add_patch(rect_gt)
+                        plt.savefig(os.path.join('debug', 'train_' + str(idx) + '_' + str(idx_img) + '.png'))
+                        plt.close()
+                exit()
 
-        # backprop
-        optimizer.zero_grad()
-        loss_l, loss_c = criterion(out, targets)
-        loss = loss_l + loss_c
-        loss.backward()
-        optimizer.step()
-        t1 = time.time()
-        loc_loss += loss_l.data[0]
-        conf_loss += loss_c.data[0]
+            # forward
+            t0 = time.time()
+            out = net_cv[idx](images)
+
+            # backprop
+            optimizer_cv[idx].zero_grad()
+            loss_l, loss_c = criterion(out, targets)
+            loss = loss_l + loss_c
+            loss.backward()
+            optimizer_cv[idx].step()
+            t1 = time.time()
+
+            loss_cv += loss.data[0]
+            loc_loss_cv += loss_l.data[0]
+            conf_loss_cv += loss_c.data[0]
+            del out
+
+        loss_cv, loc_loss_cv, conf_loss_cv = loss_cv / cross_validation, loc_loss_cv / cross_validation, conf_loss_cv / cross_validation
 
         # train log
         if iteration % 10 == 0:
             print('Timer: %.4f sec.' % (t1 - t0))
-            print('iter ' + repr(iteration) + ' || Loss: %.4f ||' % (loss.data[0]), end=' ')
+            print('iter ' + repr(iteration) + ' || Loss: %.4f ||' % (loss_cv), end=' ')
             if args.visdom and args.send_images_to_visdom:
                 random_batch_index = np.random.randint(images.size(0))
                 viz.image(images.data[random_batch_index].cpu().numpy())
+
+            # write text log
+            f_train.write(str(iteration)+'\t'+str(loss_cv)+'\t'+str(loc_loss_cv)+'\t'+str(conf_loss_cv)+'\n')
+            f_train.flush()
 
         # validation phase for each several train iter
         if iteration % 100 == 0 and iteration > 10:
             del images, targets
             net.eval()
             loss_l_val, loss_c_val, loss_val = 0., 0., 0.
-            batch_iterator_val = iter(data_loader_valid)
-            for idx in range(len(batch_iterator_val)):
-                img_val, tar_val = next(batch_iterator_val)
-                if args.cuda:
-                    img_val = img_val.cuda().view(img_val.shape[0], -1, img_val.shape[3], img_val.shape[4])
-                    img_val = Variable(img_val, volatile=True)
-                    tar_val = [Variable(anno.cuda(), volatile=True) for anno in tar_val]
-                else:
-                    img_val = img_val.view(img_val.shape[0], -1, img_val.shape[3], img_val.shape[4])
-                    img_val = Variable(img_val, volatile=True)
-                    tar_val = [Variable(anno, volatile=True) for anno in tar_val]
 
-                out_val = net(img_val)
-                loss_l_val_step, loss_c_val_step = criterion(out_val, tar_val)
-                loss_val_step = loss_l_val_step + loss_c_val_step
-                loss_l_val += loss_l_val_step
-                loss_c_val += loss_c_val_step
-                loss_val += loss_val_step
-                del out_val
-            loss_l_val, loss_c_val, loss_val = loss_l_val/(idx+1), loss_c_val/(idx+1), loss_val/(idx+1)
+            for idx_c in range(cross_validation):
+
+                batch_iterator_val = iter(data_loader_valid[idx_c])
+                for idx in range(len(batch_iterator_val)):
+                    img_val, tar_val = next(batch_iterator_val)
+                    if args.cuda:
+                        img_val = img_val.cuda().view(img_val.shape[0], -1, img_val.shape[3], img_val.shape[4])
+                        img_val = Variable(img_val, volatile=True)
+                        tar_val = [Variable(anno.cuda(), volatile=True) for anno in tar_val]
+                    else:
+                        img_val = img_val.view(img_val.shape[0], -1, img_val.shape[3], img_val.shape[4])
+                        img_val = Variable(img_val, volatile=True)
+                        tar_val = [Variable(anno, volatile=True) for anno in tar_val]
+
+                    out_val = net_cv[idx_c](img_val)
+                    loss_l_val_step, loss_c_val_step = criterion(out_val, tar_val)
+                    loss_val_step = loss_l_val_step + loss_c_val_step
+                    loss_l_val += loss_l_val_step
+                    loss_c_val += loss_c_val_step
+                    loss_val += loss_val_step
+                    del out_val
+
+            loss_l_val, loss_c_val, loss_val = \
+                loss_l_val/(idx+1)/cross_validation, loss_c_val/(idx+1)/cross_validation, loss_val/(idx+1)/cross_validation
+
             print('\n')
             print('VALID: iter ' + repr(iteration) + ' || Loss: %.4f ||' % (loss_val.data[0]), end='\n')
             if args.visdom:
                 viz.line(
                     X=torch.ones((1, 3)).cpu() * iteration,
                     Y=torch.Tensor([loss_l_val.data[0], loss_c_val.data[0],
-                                    loss_l_val.data[0] + loss_c_val.data[0]]).unsqueeze(0).cpu(),
+                                    loss_val.data[0]]).unsqueeze(0).cpu(),
                     win=valid_lot,
                     update='append'
                 )
             del img_val, tar_val
+            # write valid log
+            f_valid.write(str(iteration)+'\t'+str(loss_val)+'\t'+str(loss_l_val)+'\t'+str(loss_c_val)+'\n')
+            f_valid.flush()
 
         # visdom train plot
         # skip the first 10 iteration plot: too high loss, less pretty
@@ -371,6 +452,7 @@ def train():
                     win=lot,
                     update='append'
                 )
+                """
                 # hacky fencepost solution for 0th epoch plot
                 if iteration == 0:
                     viz.line(
@@ -380,6 +462,7 @@ def train():
                         win=epoch_lot,
                         update=True
                     )
+                """
 
         # save checkpoint
         if iteration % 5000 == 0:
