@@ -62,9 +62,9 @@ num_classes = 2 # lesion or background
 batch_size = args.batch_size
 #accum_batch_size = 32
 #iter_size = accum_batch_size / batch_size
-max_iter = 50000
+max_iter = 10000
 weight_decay = 0.0005
-stepvalues = (20000, 30000, 40000)
+stepvalues = (2000, 5000)
 gamma = 0.1
 momentum = 0.9
 # use batchnorm for vgg & extras
@@ -309,7 +309,7 @@ def train():
             """
             epoch += 1
 
-        if iteration == 1500:
+        if iteration == 2000:
             for idx in range(cross_validation):
                 # Freeze the conf layers after some iters to prevent overfitting
                 for conf_param in net_cv[idx].module.conf.parameters():
