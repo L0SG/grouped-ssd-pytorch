@@ -20,16 +20,16 @@ from layers.box_utils import nms
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from PIL import Image
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, KFold
 
 parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
-parser.add_argument('--trained_model', default='/home/tkdrlf9202/PycharmProjects/liver_segmentation/ssd_liverdet/weights/ssd300_allconv_100000.pth',
+parser.add_argument('--trained_model', default='/home/tkdrlf9202/PycharmProjects/liver_segmentation/ssd_liverdet/weights/ssd300_allgroup_vanilla_BN_CV0_10000.pth',
                     type=str, help='Trained state_dict file path to open')
 parser.add_argument('--save_folder', default='eval/', type=str,
                     help='Dir to save results')
-parser.add_argument('--visual_threshold', default=0.6, type=float,
+parser.add_argument('--visual_threshold', default=0.5, type=float,
                     help='Final confidence threshold')
-parser.add_argument('--cuda', default=False, type=bool,
+parser.add_argument('--cuda', default=True, type=bool,
                     help='Use cuda to train model')
 #parser.add_argument('--voc_root', default=VOCroot, help='Location of VOC root directory')
 
@@ -63,12 +63,13 @@ def test_net(save_folder, net, cuda, testset, transform, thresh):
         y = net(x)      # forward pass
         detections = y.data
         # scale each detection back up to the image
-        scale = torch.Tensor([img.shape[1], img.shape[0],
-                             img.shape[1], img.shape[0]])
+        scale = torch.Tensor([img.shape[2], img.shape[1],
+                             img.shape[2], img.shape[1]])
         pred_num = 0
-        for i in range(detections.size(1)):
+        # skip background class (0) with range start of 1
+        for i in range(1, detections.size(1)):
             j = 0
-            while detections[0, i, j, 0] >= 0.6:
+            while detections[0, i, j, 0] >= thresh:
                 if pred_num == 0:
                     with open(filename, mode='a') as f:
                         f.write('PREDICTIONS: '+'\n')
@@ -91,7 +92,7 @@ def test_net(save_folder, net, cuda, testset, transform, thresh):
         if 'coords' in locals():
             xs_p, ys_p = int(coords[0]), int(coords[1])
             xd_p, yd_p = int(coords[2]) - xs_p, int(coords[3]) - ys_p
-
+        """
         # visualization: draw gt & predicted bounding box and save to image
         output_image = img.copy()
         fig, ax = plt.subplots(1)
@@ -105,23 +106,16 @@ def test_net(save_folder, net, cuda, testset, transform, thresh):
             ax.add_patch(rect_p)
         plt.savefig(os.path.join(args.save_folder, 'test_'+str(idx)+'.png'))
         plt.close()
-
+        """
 
 
 if __name__ == '__main__':
-    # load net
-    num_classes = 2 # 1 lesion + 1 background
-    net = build_ssd('test', 300, num_classes) # initialize SSD
-    net.load_state_dict(torch.load(args.trained_model))
-    net.eval()
-    print('Finished loading model!')
-    # load data
-    #testset = VOCDetection(args.voc_root, [('2007', 'test')], None, AnnotationTransform())
     """"########## Data Loading & dimension matching ##########"""
     # load custom CT dataset
     datapath = '/home/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
     train_sets = [('liver_lesion')]
-
+    cross_validation = 5
+    cv_idx_for_test = 0
 
     def load_lesion_dataset(data_path):
         """
@@ -144,7 +138,6 @@ if __name__ == '__main__':
 
         return ct, coordinate
 
-
     ct, coord = load_lesion_dataset(datapath)
     # ct: [subjects, sample, phase, channel, 512, 512]
     # coord: [subjects, sample, phase, channel, 5], [x_min, y_min, x_max, y_max, 0 (lesion class label)] format
@@ -154,6 +147,26 @@ if __name__ == '__main__':
         # use only coordinate from the middle slice, ditch the upper & lower ones
         coord[idx] = coord[idx][:, :, 1, :]
 
+    # 5-fold CV
+    kf = KFold(n_splits=cross_validation)
+    kf.get_n_splits(ct, coord)
+
+    # flatten the subject & sample dimension for each sets by stacking
+    ct_train = []
+    ct_valid = []
+    coord_ssd_train = []
+    coord_ssd_valid = []
+    for train_index, valid_index in kf.split(ct):
+        ct_train_part = [ct[x] for ind, x in enumerate(train_index)]
+        ct_valid_part = [ct[x] for ind, x in enumerate(valid_index)]
+        coord_train_part = [coord[x] for ind, x in enumerate(train_index)]
+        coord_valid_part = [coord[x] for ind, x in enumerate(valid_index)]
+
+        ct_train.append(np.vstack(ct_train_part))
+        ct_valid.append(np.vstack(ct_valid_part))
+        coord_ssd_train.append(np.vstack(coord_train_part).astype(np.float64))
+        coord_ssd_valid.append(np.vstack(coord_valid_part).astype(np.float64))
+    """
     # split train & valid set, subject-level (without shuffle)
     ct_train, ct_valid, coord_ssd_train, coord_ssd_valid = train_test_split(ct, coord, test_size=0.1, shuffle=False)
 
@@ -162,16 +175,42 @@ if __name__ == '__main__':
     ct_valid = np.vstack(ct_valid)
     coord_ssd_train = np.vstack(coord_ssd_train).astype(np.float64)
     coord_ssd_valid = np.vstack(coord_ssd_valid).astype(np.float64)
+    """
     """#########################################################"""
+
+
+    # load net
+    num_classes = 2 # 1 lesion + 1 background
+    size = 300
+    batch_norm = True
+
+    net = build_ssd('test', size, num_classes, batch_norm=batch_norm) # initialize SSD
+    # load weights trained with Dataparallel
+    # https://discuss.pytorch.org/t/solved-keyerror-unexpected-key-module-encoder-embedding-weight-in-state-dict/1686/3
+    state_dict = torch.load(args.trained_model)
+    from collections import OrderedDict
+    new_state_dict = OrderedDict()
+    for k, v in state_dict.items():
+        name = k[7:]
+        new_state_dict[name] = v
+    net.load_state_dict(new_state_dict)
+    # eval mode
+    net.eval()
+    print('Finished loading model!')
+    # load data
+    #testset = VOCDetection(args.voc_root, [('2007', 'test')], None, AnnotationTransform())
 
     if args.cuda:
         net = net.cuda()
         cudnn.benchmark = True
     # evaluation
+    # cv_idx_for_test must be equal to the checkpoint idx of the trained model (otherwise cheat)
     means = (34, 34, 34)
-    validset = FISHdetection(ct_valid, coord_ssd_valid, None, 'lesion_valid')
-    allset = FISHdetection(np.vstack(ct), np.vstack(coord).astype(np.float64), None, 'lesion_all')
+    trainset = FISHdetection(ct_train[cv_idx_for_test], coord_ssd_train[cv_idx_for_test], None, 'lesion_train')
+    validset = FISHdetection(ct_valid[cv_idx_for_test], coord_ssd_valid[cv_idx_for_test], None, 'lesion_valid')
 
-    test_net(args.save_folder, net, args.cuda, allset,
-             BaseTransform(net.size, means),
+    # allset = FISHdetection(np.vstack(ct), np.vstack(coord).astype(np.float64), None, 'lesion_all')
+
+    test_net(args.save_folder, net, args.cuda, validset,
+             BaseTransform(size, means),
              thresh=args.visual_threshold)

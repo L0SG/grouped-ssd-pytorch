@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 from layers import *
-from data import v2
+from data import v2_custom
 import os
 
 GROUPS_VGG = 4
@@ -32,7 +32,7 @@ class SSD(nn.Module):
         self.num_classes = num_classes
         self.batch_norm = batch_norm
         # TODO: implement __call__ in PriorBox
-        self.priorbox = PriorBox(v2)
+        self.priorbox = PriorBox(v2_custom)
         self.priors = Variable(self.priorbox.forward(), volatile=True)
         self.size = 300
 
@@ -233,7 +233,7 @@ extras = {
 mbox = {
     #'300': [4, 6, 6, 6, 4, 4],  # number of boxes per feature map location
     # for v2_custom cfg: use 6 for lowest layer
-    '300': [4, 6, 6, 6, 4, 4],
+    '300': [6, 6, 6, 6, 4, 4],
     '512': [],
 }
 
