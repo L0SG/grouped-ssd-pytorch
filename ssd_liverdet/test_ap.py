@@ -26,12 +26,10 @@ from collections import defaultdict, namedtuple
 import pickle
 
 parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
-parser.add_argument('--trained_model', default='weights/ssd300_allgroup_v2custom_BN_CV0_9000.pth',
+parser.add_argument('--trained_model', default='weights/ssd300_allgroup_v2custom_BN_CV2_9000.pth',
                     type=str, help='Trained state_dict file path to open')
 parser.add_argument('--save_folder', default='eval/', type=str,
                     help='Dir to save results')
-parser.add_argument('--top_k', default=5, type=int,
-                    help='Further restrict the number of predictions to parse')
 parser.add_argument('--visual_threshold', default=0.01, type=float,
                     help='Final confidence threshold')
 parser.add_argument('--cuda', default=True, type=bool,
@@ -99,25 +97,10 @@ def test_net(save_folder, net, cuda, testset, transform, top_k,
     all_boxes = [[[] for _ in range(num_images)]
                  for _ in range(2)]
     output_dir = get_output_dir('ssd300_120000', 'test')
-    det_file = os.path.join(output_dir, 'detections.pkl')
-    """
-    # dump predictions and assoc. ground truth to text file for now
-    filename = save_folder+'test1.txt'
-    num_images = len(testset)
-    """
-    """
-    # define ap calculator
-    ap_calculator = APCalculator()
-    
-    # define box namedtuple for the calculator
-    Box = namedtuple('Box', ['label', 'labelid', 'coords', 'size'])
-    """
-
 
     # define ground truth and prediciton list
     # length is the number of valid set images
     # elements of predictions contains [img ID, confidence, coords]
-    ground_truth = []
     predictions = []
     # class_recs extract gt and detected flag for AP calculation
     class_recs = {}
@@ -158,7 +141,6 @@ def test_net(save_folder, net, cuda, testset, transform, top_k,
 
         # append ground truth and extend the predictions
         # cut out the label (last elem) since it's not necessary for AP
-        ground_truth.append(annotation[0][:, :-1])
         predictions.extend(boxes)
 
         # only use the portal phase bbox
@@ -170,10 +152,6 @@ def test_net(save_folder, net, cuda, testset, transform, top_k,
         # bbox = annotation[0][:, :-1]
         # det = [False] * bbox.shape[0]
         # npos += bbox.shape[0]
-
-
-
-    print('test')
 
     # sort the prediction in descending global confidence
     # first parse predictions into img ids, confidence and bb
@@ -231,9 +209,7 @@ def test_net(save_folder, net, cuda, testset, transform, top_k,
     prec = tp / np.maximum(tp + fp, np.finfo(np.float64).eps)
     ap = voc_ap(rec, prec, use_07_metric=True)
 
-    print('test')
-
-
+    print(ap)
 
 
 if __name__ == '__main__':
@@ -242,7 +218,7 @@ if __name__ == '__main__':
     datapath = '/home/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
     train_sets = [('liver_lesion')]
     cross_validation = 5
-    cv_idx_for_test = 0
+    cv_idx_for_test = 2
 
     def load_lesion_dataset(data_path):
         """
@@ -326,6 +302,6 @@ if __name__ == '__main__':
 
     # allset = FISHdetection(np.vstack(ct), np.vstack(coord).astype(np.float64), None, 'lesion_all')
 
-    test_net(args.save_folder, net, args.cuda, trainset,
-             BaseTransform(size, means), args.top_k, size,
+    test_net(args.save_folder, net, args.cuda, validset,
+             BaseTransform(size, means), size,
              thresh=args.visual_threshold)
