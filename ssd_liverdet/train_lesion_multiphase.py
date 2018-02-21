@@ -71,7 +71,7 @@ momentum = 0.9
 batch_norm = True
 
 # data augmentation hyperparams
-gt_pixel_jitter = 0.01
+gt_pixel_jitter = 0.00
 expand_ratio = 1.5
 
 # CV hyperparams
@@ -468,7 +468,7 @@ def train():
         if iteration % 1000 == 0:
             print('Saving state, iter:', iteration)
             for idx in range(cross_validation):
-                torch.save(net_cv[idx].state_dict(), 'weights/ssd300_allgroup_v2custom_BN_CV' + str(idx) + '_' +
+                torch.save(net_cv[idx].state_dict(), 'weights/ssd300_allgroup_v2custom_BN_nojitter_CV' + str(idx) + '_' +
                            repr(iteration) + '.pth')
     # torch.save(net[idx].state_dict(), args.save_folder + '' + args.version + '.pth')
 
