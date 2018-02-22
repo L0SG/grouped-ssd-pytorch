@@ -196,7 +196,11 @@ def add_extras(cfg, size, i, batch_norm=False):
         in_channels = v
     # SSD512 need add one more Conv layer(Conv12_2)
     if size == 512:
-        layers += [nn.Conv2d(in_channels, 256, kernel_size=4, padding=1, groups=GROUPS_EXTRA)]
+        if batch_norm is False:
+            layers += [nn.Conv2d(in_channels, 256, kernel_size=4, padding=1, groups=GROUPS_EXTRA)]
+        else:
+            layers += [nn.Conv2d(in_channels, 256, kernel_size=4, padding=1, groups=GROUPS_EXTRA),
+                       nn.BatchNorm2d(v)]
     return layers
 
 

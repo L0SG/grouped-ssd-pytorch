@@ -430,6 +430,7 @@ def train():
                 net_ap.load_state_dict(new_state_dict)
                 net_ap.eval()
                 ap += test_net(net_ap, args.cuda, dataset_ap[idx],BaseTransform(ssd_dim, means), ssd_dim, thresh=confidence_threshold)
+                del net_ap
             ap /= cross_validation
             print('average AP for valid set: ' + str(ap))
             print('VALID: iter ' + repr(iteration) + ' || Loss: %.4f ||' % (loss_val.data[0]), end='\n')
