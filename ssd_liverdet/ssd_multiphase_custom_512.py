@@ -6,8 +6,8 @@ from layers import *
 from data import v2_custom_512
 import os
 
-GROUPS_VGG = 4
-GROUPS_EXTRA = 4
+GROUPS_VGG = 1
+GROUPS_EXTRA = 1
 
 class SSD(nn.Module):
     """Single Shot Multibox Architecture

@@ -26,11 +26,11 @@ from collections import defaultdict, namedtuple
 import pickle
 
 parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
-parser.add_argument('--trained_model', default='weights/ssd300_allgroup_v2custom_BN_nofreeze_CV0_9000.pth',
+parser.add_argument('--trained_model', default='weights/ssd300_allgroup_v2custom_BN_CV0_9000.pth',
                     type=str, help='Trained state_dict file path to open')
 parser.add_argument('--save_folder', default='eval/', type=str,
                     help='Dir to save results')
-parser.add_argument('--visual_threshold', default=0.01, type=float,
+parser.add_argument('--visual_threshold', default=0.8, type=float,
                     help='Final confidence threshold')
 parser.add_argument('--cuda', default=True, type=bool,
                     help='Use cuda to train model')
@@ -131,6 +131,8 @@ def test_net(save_folder, net, cuda, testset, transform, top_k,
         if detections.dim() == 0:
             continue
 
+
+
         # we only care for lesion class (1 in dim=1)
         score = detections[:, 0].cpu().numpy()
         coords = (detections[:, 1:] * scale).cpu().numpy()
@@ -138,6 +140,9 @@ def test_net(save_folder, net, cuda, testset, transform, top_k,
         # attach img id to the leftmost side
         img_id = np.ones((boxes.shape[0], 1)) * idx
         boxes = np.hstack((img_id, boxes))
+
+        # filter out boxes with confidence threshold
+        boxes = boxes[boxes[:, 1] > thresh]
 
         # append ground truth and extend the predictions
         # cut out the label (last elem) since it's not necessary for AP
@@ -215,7 +220,7 @@ def test_net(save_folder, net, cuda, testset, transform, top_k,
 if __name__ == '__main__':
     """"########## Data Loading & dimension matching ##########"""
     # load custom CT dataset
-    datapath = '/home/vision/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
+    datapath = '/home/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
     train_sets = [('liver_lesion')]
     cross_validation = 5
     cv_idx_for_test = 0
