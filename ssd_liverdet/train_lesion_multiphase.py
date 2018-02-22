@@ -65,7 +65,7 @@ batch_size = args.batch_size
 #iter_size = accum_batch_size / batch_size
 max_iter = 10001
 weight_decay = 0.0005
-stepvalues = (2000, 5000)
+stepvalues = (5000)
 gamma = 0.1
 momentum = 0.9
 # use batchnorm for vgg & extras

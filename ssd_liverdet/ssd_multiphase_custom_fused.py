@@ -9,6 +9,15 @@ import os
 GROUPS_VGG = 1
 GROUPS_EXTRA = 1
 
+def xavier(param):
+    nn.init.xavier_uniform(param)
+
+
+def weights_init(m):
+    if isinstance(m, nn.Conv2d):
+        xavier(m.weight.data)
+        m.bias.data.zero_()
+
 class SSD(nn.Module):
     """Single Shot Multibox Architecture
     The network is composed of a base VGG network followed by the
@@ -55,12 +64,14 @@ class SSD(nn.Module):
         # layer for deconv of conv5_3 to match dim of conv4_3
         self.fuse_deconv_53 = nn.ConvTranspose2d(512, 512,
                                                  kernel_size=2, stride=2)
+        self.fuse_deconv_53.apply(weights_init)
         if batch_norm:
             self.bn_fuse_deconv_53 = nn.BatchNorm2d(512)
         # init the deconv layer with bilinear upsampling
         # TODO: how?
 
         self.fuse_conv_53 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+        self.fuse_conv_53.apply(weights_init)
         if batch_norm:
             self.bn_fuse_conv_53 = nn.BatchNorm2d(512)
         # L2 norm for fuse_conv_53
@@ -68,6 +79,7 @@ class SSD(nn.Module):
 
         # extra conv for conf4_3 for efficient fusing of fuse_conv5_3
         self.fuse_conv_43 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+        self.fuse_conv_43.apply(weights_init)
         if batch_norm:
             self.bn_fuse_conv_43 = nn.BatchNorm2d(512)
 
@@ -291,7 +303,7 @@ base = {
     '512': [],
 }
 extras = {
-    '300': [512, 'S', 1024, 256, 'S', 512, 256, 512, 256, 512],
+    '300': [256, 'S', 512, 128, 'S', 256, 128, 256, 128, 256],
     '512': [],
 }
 mbox = {
