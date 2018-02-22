@@ -8,7 +8,7 @@ import argparse
 from torch.autograd import Variable
 import torch.utils.data as data
 #from data import v2, v1, AnnotationTransform, VOCDetection, detection_collate, VOCroot, VOC_CLASSES
-from data import FISHdetection, detection_collate, v2, v1
+from data import FISHdetection, detection_collate, v2, v1, BaseTransform
 from utils.augmentations import SSDAugmentation
 from layers.modules import MultiBoxLoss
 from ssd_multiphase_custom_512 import build_ssd
@@ -17,6 +17,7 @@ import time
 import h5py
 from sklearn.model_selection import train_test_split, KFold
 import copy
+from test_ap import test_net
 
 def str2bool(v):
     return v.lower() in ("yes", "true", "t", "1")
@@ -29,7 +30,7 @@ parser.add_argument('--basenet', default='vgg16_reducedfc.pth', help='pretrained
 parser.add_argument('--jaccard_threshold', default=0.5, type=float, help='Min Jaccard index for matching')
 parser.add_argument('--batch_size', default=16, type=int, help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str, help='Resume from checkpoint')
-parser.add_argument('--num_workers', default=4, type=int, help='Number of workers used in dataloading')
+parser.add_argument('--num_workers', default=1, type=int, help='Number of workers used in dataloading')
 # parser.add_argument('--iterations', default=120000, type=int, help='Number of training iterations')
 parser.add_argument('--start_iter', default=0, type=int, help='Begin counting iterations starting from this value (should be used with resume)')
 parser.add_argument('--cuda', default=True, type=str2bool, help='Use cuda to train model')
@@ -62,9 +63,9 @@ num_classes = 2 # lesion or background
 batch_size = args.batch_size
 #accum_batch_size = 32
 #iter_size = accum_batch_size / batch_size
-max_iter = 50000
+max_iter = 10001
 weight_decay = 0.0005
-stepvalues = (20000, 30000, 40000)
+stepvalues = (2000, 5000)
 gamma = 0.1
 momentum = 0.9
 # use batchnorm for vgg & extras
@@ -76,6 +77,9 @@ expand_ratio = 1.5
 
 # CV hyperparams
 cross_validation = 5
+
+# ap hyperparam
+confidence_threshold = 0.01
 """#########################################################"""
 
 
@@ -157,7 +161,7 @@ coord_ssd_train = np.array(coord).astype(np.float64)
 """#########################################################"""
 
 """#################### Network Definition ####################"""
-ssd_net = build_ssd('train', 512, num_classes, batch_norm=batch_norm)
+ssd_net = build_ssd('train', ssd_dim, num_classes, batch_norm=batch_norm)
 net = ssd_net
 
 if args.cuda:
@@ -205,10 +209,10 @@ del net
 """#########################################################"""
 
 # create train & valid log text file
-f_train = open('train_log.txt', 'w')
+f_train = open('train_log_ssd512_allconv_v2custom_BN.txt', 'w')
 f_train.write('iteration\tloss\tloc_loss\tconf_loss\n')
-f_valid = open('valid_log.txt', 'w')
-f_valid.write('iteration\tloss\tloc_loss\tconf_loss\n')
+f_valid = open('valid_log_ssd512_allconv_custom_BN.txt', 'w')
+f_valid.write('iteration\tloss\tloc_loss\tconf_loss\tAP\n')
 
 def train():
     # loss counters
@@ -218,12 +222,14 @@ def train():
     print('Loading Dataset...')
     dataset_train = []
     dataset_valid = []
+    dataset_ap = []
     # create 5-fold CV datasets
     for idx in range(cross_validation):
         dataset_train.append(FISHdetection(ct_train[idx], coord_ssd_train[idx],
                                       SSDAugmentation(gt_pixel_jitter, expand_ratio, ssd_dim, means), dataset_name='liver_lesion_train' + str(idx)))
         dataset_valid.append(FISHdetection(ct_valid[idx], coord_ssd_valid[idx],
                                       SSDAugmentation(gt_pixel_jitter, expand_ratio, ssd_dim, means), dataset_name='liver_detection_valid' + str(idx)))
+        dataset_ap.append(FISHdetection(ct_valid[idx], coord_ssd_valid[idx], None, 'lesion_valid_ap'))
 
     # hard-define the epoch size to the minimum of set in CV: minimal impact
     epoch_size = []
@@ -257,19 +263,16 @@ def train():
                 legend=['Loc Loss', 'Conf Loss', 'Loss']
             )
         )
-        """
-        epoch_lot = viz.line(
-            X=torch.zeros((1,)).cpu(),
-            Y=torch.zeros((1, 3)).cpu(),
+        ap_lot = viz.line(
+            X=torch.zeros((1)).cpu(),
+            Y=torch.zeros((1)).cpu(),
             opts=dict(
-                xlabel='Epoch',
-                ylabel='Loss',
-                title='Epoch SSD_Liver Training Loss',
-                legend=['Loc Loss', 'Conf Loss', 'Loss']
+                xlabel='Iteration',
+                ylabel='AP',
+                title='SSD_Liver AP validation',
+                legend=['AP']
             )
         )
-        """
-
     batch_iterator = None
 
     data_loader_train = []
@@ -292,29 +295,14 @@ def train():
             step_index += 1
             for idx in range(cross_validation):
                 adjust_learning_rate(optimizer_cv[idx], args.gamma, step_index)
-            """
-            if args.visdom:
-                viz.line(
-                    X=torch.ones((1, 3)).cpu() * epoch,
-                    Y=torch.Tensor([loc_loss, conf_loss,
-                        loc_loss + conf_loss]).unsqueeze(0).cpu() / epoch_size,
-                    win=epoch_lot,
-                    update='append'
-                )
-            """
-            """
-            # reset epoch loss counters
-            loc_loss = 0
-            conf_loss = 0
-            """
             epoch += 1
-
-        if iteration == 1500:
+        """
+        if iteration == 2000:
             for idx in range(cross_validation):
                 # Freeze the conf layers after some iters to prevent overfitting
                 for conf_param in net_cv[idx].module.conf.parameters():
                     conf_param.requires_grad = False
-
+        """
         # load train data
         loss_cv = 0.
         loc_loss_cv = 0.
@@ -426,7 +414,24 @@ def train():
             loss_l_val, loss_c_val, loss_val = \
                 loss_l_val/(idx+1)/cross_validation, loss_c_val/(idx+1)/cross_validation, loss_val/(idx+1)/cross_validation
 
+            # calculate AP
             print('\n')
+            ap = 0.
+            for idx in range(cross_validation):
+                # load weights trained with Dataparallel
+                # https://discuss.pytorch.org/t/solved-keyerror-unexpected-key-module-encoder-embedding-weight-in-state-dict/1686/3
+                state_dict = net_cv[idx].state_dict()
+                from collections import OrderedDict
+                new_state_dict = OrderedDict()
+                for k, v in state_dict.items():
+                    name = k[7:]
+                    new_state_dict[name] = v
+                net_ap = build_ssd('test', ssd_dim, num_classes, batch_norm=batch_norm).cuda()
+                net_ap.load_state_dict(new_state_dict)
+                net_ap.eval()
+                ap += test_net(net_ap, args.cuda, dataset_ap[idx],BaseTransform(ssd_dim, means), ssd_dim, thresh=confidence_threshold)
+            ap /= cross_validation
+            print('average AP for valid set: ' + str(ap))
             print('VALID: iter ' + repr(iteration) + ' || Loss: %.4f ||' % (loss_val.data[0]), end='\n')
             if args.visdom:
                 viz.line(
@@ -436,9 +441,16 @@ def train():
                     win=valid_lot,
                     update='append'
                 )
+                viz.line(
+                    X=torch.ones((1)).cpu() * iteration,
+                    Y=torch.Tensor([ap]).cpu(),
+                    win=ap_lot,
+                    update='append'
+                )
+
             del img_val, tar_val
             # write valid log
-            f_valid.write(str(iteration)+'\t'+str(loss_val.data[0])+'\t'+str(loss_l_val.data[0])+'\t'+str(loss_c_val.data[0])+'\n')
+            f_valid.write(str(iteration) + '\t' + str(loss_val.data[0]) + '\t' + str(loss_l_val.data[0]) + '\t' + str(loss_c_val.data[0]) + str(ap) + '\n')
             f_valid.flush()
 
         # visdom train plot
@@ -452,23 +464,11 @@ def train():
                     win=lot,
                     update='append'
                 )
-                """
-                # hacky fencepost solution for 0th epoch plot
-                if iteration == 0:
-                    viz.line(
-                        X=torch.zeros((1, 3)).cpu(),
-                        Y=torch.Tensor([loc_loss, conf_loss,
-                            loc_loss + conf_loss]).unsqueeze(0).cpu(),
-                        win=epoch_lot,
-                        update=True
-                    )
-                """
-
         # save checkpoint
         if iteration % 1000 == 0:
             print('Saving state, iter:', iteration)
             for idx in range(cross_validation):
-                torch.save(net_cv[idx].state_dict(), 'weights/ssd512_allconv_custom_BN_' + str(iteration) + '_CV' +
+                torch.save(net_cv[idx].state_dict(), 'weights/ssd512_allconv_custom_BN' + str(iteration) + '_CV' +
                            str(idx) + '.pth')
     # torch.save(net[idx].state_dict(), args.save_folder + '' + args.version + '.pth')
 

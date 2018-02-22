@@ -21,37 +21,19 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from PIL import Image
 from sklearn.model_selection import train_test_split, KFold
-from average_precision import APCalculator
 from collections import defaultdict, namedtuple
 import pickle
 
 parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
 parser.add_argument('--trained_model', default='weights/ssd300_allgroup_v2custom_BN_CV0_9000.pth',
                     type=str, help='Trained state_dict file path to open')
-parser.add_argument('--save_folder', default='eval/', type=str,
-                    help='Dir to save results')
-parser.add_argument('--visual_threshold', default=0.8, type=float,
+parser.add_argument('--conf_threshold', default=0.01, type=float,
                     help='Final confidence threshold')
 parser.add_argument('--cuda', default=True, type=bool,
                     help='Use cuda to train model')
 #parser.add_argument('--voc_root', default=VOCroot, help='Location of VOC root directory')
 
 args = parser.parse_args()
-
-if not os.path.exists(args.save_folder):
-    os.mkdir(args.save_folder)
-
-
-def get_output_dir(name, phase):
-    """Return the directory where experimental artifacts are placed.
-    If the directory does not exist, it is created.
-    A canonical path is built using the name from an imdb and a network
-    (if not None).
-    """
-    filedir = os.path.join(name, phase)
-    if not os.path.exists(filedir):
-        os.makedirs(filedir)
-    return filedir
 
 
 def voc_ap(rec, prec, use_07_metric=True):
@@ -88,15 +70,9 @@ def voc_ap(rec, prec, use_07_metric=True):
     return ap
 
 
-def test_net(save_folder, net, cuda, testset, transform, top_k,
+def test_net(net, cuda, testset, transform,
              imsize=300, thresh=0.05):
     num_images = len(testset)
-    # all detections are collected into:
-    #    all_boxes[cls][image] = N x 5 array of detections in
-    #    (x1, y1, x2, y2, score)
-    all_boxes = [[[] for _ in range(num_images)]
-                 for _ in range(2)]
-    output_dir = get_output_dir('ssd300_120000', 'test')
 
     # define ground truth and prediciton list
     # length is the number of valid set images
@@ -108,7 +84,7 @@ def test_net(save_folder, net, cuda, testset, transform, top_k,
     npos = 0
 
     for idx in range(num_images):
-        print('Testing image {:d}/{:d}....'.format(idx+1, num_images))
+        #print('Testing image {:d}/{:d}....'.format(idx+1, num_images))
         # pull img & annotations
         img = testset.pull_image(idx)
         annotation = [testset.pull_anno(idx)]
@@ -215,6 +191,7 @@ def test_net(save_folder, net, cuda, testset, transform, top_k,
     ap = voc_ap(rec, prec, use_07_metric=True)
 
     print(ap)
+    return ap
 
 
 if __name__ == '__main__':
@@ -307,6 +284,6 @@ if __name__ == '__main__':
 
     # allset = FISHdetection(np.vstack(ct), np.vstack(coord).astype(np.float64), None, 'lesion_all')
 
-    test_net(args.save_folder, net, args.cuda, validset,
+    test_net(net, args.cuda, validset,
              BaseTransform(size, means), size,
-             thresh=args.visual_threshold)
+             thresh=args.conf_threshold)

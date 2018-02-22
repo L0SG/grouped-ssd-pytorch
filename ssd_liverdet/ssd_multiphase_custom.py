@@ -6,8 +6,8 @@ from layers import *
 from data import v2_custom
 import os
 
-GROUPS_VGG = 4
-GROUPS_EXTRA = 4
+GROUPS_VGG = 1
+GROUPS_EXTRA = 1
 
 class SSD(nn.Module):
     """Single Shot Multibox Architecture
@@ -47,7 +47,7 @@ class SSD(nn.Module):
         self.conf = nn.ModuleList(head[1])
 
         if phase == 'test':
-            self.softmax = nn.Softmax()
+            self.softmax = nn.Softmax(dim=-1)
             self.detect = Detect(num_classes, 0, 200, 0.01, 0.45)
 
     def forward(self, x):
@@ -116,7 +116,8 @@ class SSD(nn.Module):
         if self.phase == "test":
             output = self.detect(
                 loc.view(loc.size(0), -1, 4),                   # loc preds
-                self.softmax(conf.view(-1, self.num_classes)),  # conf preds
+                #self.softmax(conf.view(-1, self.num_classes)),  # conf preds
+                self.softmax(conf.view(conf.size(0), -1, self.num_classes)),
                 self.priors.type(type(x.data))                  # default boxes
             )
         else:
@@ -159,8 +160,13 @@ def vgg(cfg, i, batch_norm=False):
     pool5 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
     conv6 = nn.Conv2d(512, 1024, kernel_size=3, padding=6, dilation=6, groups=GROUPS_VGG)
     conv7 = nn.Conv2d(1024, 1024, kernel_size=1, groups=GROUPS_VGG)
-    layers += [pool5, conv6,
-               nn.ReLU(inplace=True), conv7, nn.ReLU(inplace=True)]
+    if batch_norm:
+        layers += [pool5,
+                   conv6, nn.BatchNorm2d(1024), nn.ReLU(inplace=True),
+                   conv7, nn.BatchNorm2d(1024), nn.ReLU(inplace=True)]
+    else:
+        layers += [pool5, conv6,
+                   nn.ReLU(inplace=True), conv7, nn.ReLU(inplace=True)]
     return layers
 
 
@@ -197,9 +203,9 @@ def multibox(vgg, extra_layers, cfg, num_classes, batch_norm):
     # hard-coded
     # TODO: make this generic
     if batch_norm is False:
-        vgg_source = [24, -2]
+        vgg_source = [21, -2]
     elif batch_norm is True:
-        vgg_source = [34, -2]
+        vgg_source = [30, -3]
     for k, v in enumerate(vgg_source):
         loc_layers += [nn.Conv2d(vgg[v].out_channels,
                                  cfg[k] * 4, kernel_size=3, padding=1)]
@@ -222,10 +228,10 @@ def multibox(vgg, extra_layers, cfg, num_classes, batch_norm):
 
 
 base = {
-    #'300': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'C', 512, 512, 512, 'M',
-    #512, 512, 512],
-    '300': [128, 128, 'M', 256, 256, 'M', 512, 512, 512, 'C', 1024, 1024, 1024, 'M',
-    1024, 1024, 1024],
+    '300': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'C', 512, 512, 512, 'M',
+    512, 512, 512],
+    #'300': [128, 128, 'M', 256, 256, 'M', 512, 512, 512, 'C', 1024, 1024, 1024, 'M',
+    #1024, 1024, 1024],
     '512': [],
 }
 extras = {
