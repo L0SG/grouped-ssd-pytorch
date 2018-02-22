@@ -26,7 +26,7 @@ from collections import defaultdict, namedtuple
 import pickle
 
 parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
-parser.add_argument('--trained_model', default='weights/ssd300_allgroup_v2custom_BN_CV2_9000.pth',
+parser.add_argument('--trained_model', default='weights/ssd300_allgroup_v2custom_BN_nofreeze_CV0_9000.pth',
                     type=str, help='Trained state_dict file path to open')
 parser.add_argument('--save_folder', default='eval/', type=str,
                     help='Dir to save results')
@@ -215,10 +215,10 @@ def test_net(save_folder, net, cuda, testset, transform, top_k,
 if __name__ == '__main__':
     """"########## Data Loading & dimension matching ##########"""
     # load custom CT dataset
-    datapath = '/home/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
+    datapath = '/home/vision/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
     train_sets = [('liver_lesion')]
     cross_validation = 5
-    cv_idx_for_test = 2
+    cv_idx_for_test = 0
 
     def load_lesion_dataset(data_path):
         """

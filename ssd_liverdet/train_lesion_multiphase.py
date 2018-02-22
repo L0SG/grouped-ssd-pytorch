@@ -71,7 +71,7 @@ momentum = 0.9
 batch_norm = True
 
 # data augmentation hyperparams
-gt_pixel_jitter = 0.00
+gt_pixel_jitter = 0.01
 expand_ratio = 1.5
 
 # CV hyperparams
@@ -86,7 +86,7 @@ if args.visdom:
 
 """"########## Data Loading & dimension matching ##########"""
 # load custom CT dataset
-datapath = '/home/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
+datapath = '/home/vision/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
 train_sets = [('liver_lesion')]
 
 
@@ -308,13 +308,13 @@ def train():
             conf_loss = 0
             """
             epoch += 1
-
+        """
         if iteration == 2000:
             for idx in range(cross_validation):
                 # Freeze the conf layers after some iters to prevent overfitting
                 for conf_param in net_cv[idx].module.conf.parameters():
                     conf_param.requires_grad = False
-
+        """
         # load train data
         loss_cv = 0.
         loc_loss_cv = 0.
@@ -468,7 +468,7 @@ def train():
         if iteration % 1000 == 0:
             print('Saving state, iter:', iteration)
             for idx in range(cross_validation):
-                torch.save(net_cv[idx].state_dict(), 'weights/ssd300_allgroup_v2custom_BN_nojitter_CV' + str(idx) + '_' +
+                torch.save(net_cv[idx].state_dict(), 'weights/ssd300_allgroup_v2custom_noBN_doublesize_nofreeze_' + str(iteration) + '_CV' +
                            repr(iteration) + '.pth')
     # torch.save(net[idx].state_dict(), args.save_folder + '' + args.version + '.pth')
 
