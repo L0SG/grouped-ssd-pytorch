@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 from layers import *
-from data import v2_custom_512
+from data import v2_custom
 import os
 
 GROUPS_VGG = 1
@@ -32,9 +32,9 @@ class SSD(nn.Module):
         self.num_classes = num_classes
         self.batch_norm = batch_norm
         # TODO: implement __call__ in PriorBox
-        self.priorbox = PriorBox(v2_custom_512)
+        self.priorbox = PriorBox(v2_custom)
         self.priors = Variable(self.priorbox.forward(), volatile=True)
-        self.size = 512
+        self.size = 300
 
         # SSD network
         self.vgg = nn.ModuleList(base)
@@ -49,6 +49,13 @@ class SSD(nn.Module):
         if phase == 'test':
             self.softmax = nn.Softmax(dim=-1)
             self.detect = Detect(num_classes, 0, 200, 0.01, 0.45)
+
+        # FSSD layers
+        self.fuse_conv43 = nn.Conv2d(512, 256, kernel_size=1)
+        self.fuse_fc7 = nn.Conv2d(1024, 256, kernel_size=1)
+        self.fuse_fc7_bilinear = nn.UpsamplingBilinear2d(size=(38, 38))
+        self.fuse_conv72 = nn.Conv2d(512, 256, kernel_size=1)
+        self.fuse_conv72_bilienar = nn.UpsamplingBilinear2d(size=(38, 38))
 
     def forward(self, x):
         """Applies network layers and ops on input image(s) x.
@@ -81,15 +88,19 @@ class SSD(nn.Module):
             idx_until_conv4_3 = 33
         for k in range(idx_until_conv4_3):
             x = self.vgg[k](x)
+        x_conv43 = x
 
-        s = self.L2Norm(x)
+
+        #s = self.L2Norm(x)
         # TODO: append lower level features
-        sources.append(s)
+        #sources.append(s)
 
         # apply vgg up to fc7
         for k in range(idx_until_conv4_3, len(self.vgg)):
             x = self.vgg[k](x)
-        sources.append(x)
+        #sources.append(x)
+        x_fc7 = x
+
 
         # apply extra layers and cache source layer outputs
         # hard-coded for BN case
@@ -98,6 +109,7 @@ class SSD(nn.Module):
                 x = F.relu(v(x), inplace=True)
                 if k % 2 == 1:
                     sources.append(x)
+
         elif self.batch_norm is True:
             for k, v in enumerate(self.extras):
                 x = v(x)
@@ -170,7 +182,7 @@ def vgg(cfg, i, batch_norm=False):
     return layers
 
 
-def add_extras(cfg, size, i, batch_norm=False):
+def add_extras(cfg, i, batch_norm=False):
     # Extra layers added to VGG for feature scaling
     layers = []
     in_channels = i
@@ -194,13 +206,6 @@ def add_extras(cfg, size, i, batch_norm=False):
                                nn.BatchNorm2d(v)]
             flag = not flag
         in_channels = v
-    # SSD512 need add one more Conv layer(Conv12_2)
-    if size == 512:
-        if batch_norm is False:
-            layers += [nn.Conv2d(in_channels, 256, kernel_size=4, padding=1, groups=GROUPS_EXTRA)]
-        else:
-            layers += [nn.Conv2d(in_channels, 256, kernel_size=4, padding=1, groups=GROUPS_EXTRA),
-                       nn.BatchNorm2d(256)]
     return layers
 
 
@@ -236,19 +241,20 @@ def multibox(vgg, extra_layers, cfg, num_classes, batch_norm):
 
 base = {
     '300': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'C', 512, 512, 512, 'M',
-            512, 512, 512],
-    '512': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'C', 512, 512, 512, 'M',
-            512, 512, 512],
+    512, 512, 512],
+    #'300': [128, 128, 'M', 256, 256, 'M', 512, 512, 512, 'C', 1024, 1024, 1024, 'M',
+    #1024, 1024, 1024],
+    '512': [],
 }
 extras = {
-    '300': [256, 'S', 512, 128, 'S', 256, 128, 256, 128, 256],
-    '512': [256, 'S', 512, 128, 'S', 256, 128, 'S', 256, 128, 'S', 256, 128],
+    '300': [512, 'S', 1024, 256, 'S', 512, 256, 512, 256, 512],
+    '512': [],
 }
 mbox = {
     #'300': [4, 6, 6, 6, 4, 4],  # number of boxes per feature map location
     # for v2_custom cfg: use 6 for lowest layer
     '300': [6, 6, 6, 6, 4, 4],
-    '512': [6, 6, 6, 6, 6, 4, 4],
+    '512': [],
 }
 
 
@@ -256,8 +262,11 @@ def build_ssd(phase, size=300, num_classes=21, batch_norm=False):
     if phase != "test" and phase != "train":
         print("Error: Phase not recognized")
         return
+    if size != 300:
+        print("Error: Sorry only SSD300 is supported currently!")
+        return
 
     # change the input channel from i=3 to 12
     return SSD(phase, *multibox(vgg(base[str(size)], i=12, batch_norm=batch_norm),
-                                add_extras(extras[str(size)], size, 1024, batch_norm),
+                                add_extras(extras[str(size)], 1024, batch_norm),
                                 mbox[str(size)], num_classes, batch_norm), num_classes, batch_norm)
