@@ -11,7 +11,7 @@ import torch.utils.data as data
 from data import FISHdetection, detection_collate, v2, v1, BaseTransform
 from utils.augmentations import SSDAugmentation
 from layers.modules import MultiBoxLoss
-from ssd_multiphase_custom_fused import build_ssd
+from ssd_multiphase_custom_group import build_ssd
 import numpy as np
 import time
 import h5py
@@ -209,9 +209,9 @@ del net
 """#########################################################"""
 
 # create train & valid log text file
-f_train = open('train_log_ssd300_allconv_custom_BN_fused.txt', 'w')
+f_train = open('train_log_ssd300_allconv_vanilla_BN_group.txt', 'w')
 f_train.write('iteration\tloss\tloc_loss\tconf_loss\n')
-f_valid = open('valid_log_ssd300_allconv_custom_BN_fused.txt', 'w')
+f_valid = open('valid_log_ssd300_allconv_vanilla_BN_group.txt', 'w')
 f_valid.write('iteration\tloss\tloc_loss\tconf_loss\tAP\n')
 
 def train():
@@ -469,7 +469,7 @@ def train():
         if iteration % 1000 == 0:
             print('Saving state, iter:', iteration)
             for idx in range(cross_validation):
-                torch.save(net_cv[idx].state_dict(), 'weights/ssd300_allconv_custom_BN_fused' + str(iteration) + '_CV' +
+                torch.save(net_cv[idx].state_dict(), 'weights/ssd300_allconv_vanilla_BN_group' + str(iteration) + '_CV' +
                            str(idx) + '.pth')
     # torch.save(net[idx].state_dict(), args.save_folder + '' + args.version + '.pth')
 

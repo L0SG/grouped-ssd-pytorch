@@ -53,6 +53,7 @@ def normalize_image(img):
 
 
 def generate_roi_dataset(ct_path, roi_coordinate_path):
+    USE_P_ONLY = True
 
     ct_data_master = []
     coordinate_data_master = []
@@ -75,11 +76,10 @@ def generate_roi_dataset(ct_path, roi_coordinate_path):
         for phase in sorted(glob.glob(os.path.join(subject, '*'))):
             basename_phase = os.path.basename(os.path.normpath(phase))
             path_phase = os.path.join(path_subject, basename_phase)
-            """
-            # use P phase only
-            if basename_phase != 'P':
-                continue
-            """
+            if USE_P_ONLY:
+                # use P phase only
+                if basename_phase != 'P':
+                    continue
             # get name of all ct slices
             path_slices = sorted(os.listdir(path_phase))
             path_slices_basename = [name[:-4] for name in path_slices]
@@ -115,8 +115,14 @@ def generate_roi_dataset(ct_path, roi_coordinate_path):
                 ct_data_oneslice.append(ct_image_preprocessed)
                 coordinate_oneslice.append(coordinate)
             assert len(ct_data_oneslice) == len(coordinate_oneslice)
+
             ct_data_oneslice_4phase.append(ct_data_oneslice)
             coordinate_oneslice_4phase.append(coordinate_oneslice)
+
+        # if generating one-phase data, copy the data 4 times for the model
+        if USE_P_ONLY:
+            ct_data_oneslice_4phase = ct_data_oneslice_4phase * 4
+            coordinate_oneslice_4phase = coordinate_oneslice_4phase * 4
 
         ct_data_oneslice_4phase = np.array(ct_data_oneslice_4phase)
         coordinate_oneslice_4phase = np.array(coordinate_oneslice_4phase)
@@ -159,9 +165,9 @@ def generate_roi_dataset(ct_path, roi_coordinate_path):
 # each ct image slice have 1 or more (n) bounding boxes [n, y_start, x_start, y_delta, x_delta]
 # if using P phase only, input ct should be [n, 1, 512, 512] (1 is greyscale)
 
-ct_path = '/media/hdd/tkdrlf9202/Datasets/liver_lesion_aligned/ct'
-roi_coordinate_path = '/media/hdd/tkdrlf9202/Datasets/liver_lesion_aligned/roi_coordinate'
-dataset_save_location = '/home/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
+ct_path = '/media/ssd/tkdrlf9202/Datasets/liver_lesion_aligned/ct'
+roi_coordinate_path = '/media/ssd/tkdrlf9202/Datasets/liver_lesion_aligned/roi_coordinate'
+dataset_save_location = '/home/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_ponly_aligned.h5'
 
 CT_IMAGE_SIZE = (512, 512)
 
