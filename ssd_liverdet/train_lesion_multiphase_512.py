@@ -451,7 +451,7 @@ def train():
 
             del img_val, tar_val
             # write valid log
-            f_valid.write(str(iteration) + '\t' + str(loss_val.data[0]) + '\t' + str(loss_l_val.data[0]) + '\t' + str(loss_c_val.data[0]) + str(ap) + '\n')
+            f_valid.write(str(iteration) + '\t' + str(loss_val.data[0]) + '\t' + str(loss_l_val.data[0]) + '\t' + str(loss_c_val.data[0]) + '\t' + str(ap) + '\n')
             f_valid.flush()
 
         # visdom train plot
