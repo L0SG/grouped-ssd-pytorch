@@ -209,9 +209,9 @@ del net
 """#########################################################"""
 
 # create train & valid log text file
-f_train = open('train_log_ssd300_allconv_vanilla_BN_group.txt', 'w')
+f_train = open('train_log_ssd300_group_vanilla_BN_noL2.txt', 'w')
 f_train.write('iteration\tloss\tloc_loss\tconf_loss\n')
-f_valid = open('valid_log_ssd300_allconv_vanilla_BN_group.txt', 'w')
+f_valid = open('valid_log_ssd300_group_vanilla_BN_noL2.txt', 'w')
 f_valid.write('iteration\tloss\tloc_loss\tconf_loss\tAP\n')
 
 def train():
@@ -469,7 +469,7 @@ def train():
         if iteration % 1000 == 0:
             print('Saving state, iter:', iteration)
             for idx in range(cross_validation):
-                torch.save(net_cv[idx].state_dict(), 'weights/ssd300_allconv_vanilla_BN_group' + str(iteration) + '_CV' +
+                torch.save(net_cv[idx].state_dict(), 'weights/ssd300_group_vanilla_BN_noL2' + str(iteration) + '_CV' +
                            str(idx) + '.pth')
     # torch.save(net[idx].state_dict(), args.save_folder + '' + args.version + '.pth')
 

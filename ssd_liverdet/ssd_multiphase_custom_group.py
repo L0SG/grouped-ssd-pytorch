@@ -9,7 +9,7 @@ import os
 GROUPS_VGG = 4
 GROUPS_EXTRA = 4
 feature_scale = 1
-use_fuseconv = False
+use_fuseconv = True
 
 def xavier(param):
     nn.init.xavier_uniform(param)
@@ -160,7 +160,8 @@ class SSD(nn.Module):
         for k in range(idx_until_conv4_3):
             x = self.vgg[k](x)
         # TODO: l2normed x or just x?
-        s = self.L2Norm(x)
+        #s = self.L2Norm(x)
+        s = x
         if use_fuseconv:
             if self.batch_norm:
                 s = F.relu(self.bn_fuse_11(self.fuse_11(s)), inplace=True)
