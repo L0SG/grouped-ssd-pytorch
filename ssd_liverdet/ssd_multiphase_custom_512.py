@@ -200,7 +200,7 @@ def add_extras(cfg, size, i, batch_norm=False):
             layers += [nn.Conv2d(in_channels, 256, kernel_size=4, padding=1, groups=GROUPS_EXTRA)]
         else:
             layers += [nn.Conv2d(in_channels, 256, kernel_size=4, padding=1, groups=GROUPS_EXTRA),
-                       nn.BatchNorm2d(v)]
+                       nn.BatchNorm2d(256)]
     return layers
 
 

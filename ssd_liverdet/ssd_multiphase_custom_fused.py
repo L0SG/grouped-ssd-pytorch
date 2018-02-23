@@ -9,6 +9,15 @@ import os
 GROUPS_VGG = 1
 GROUPS_EXTRA = 1
 
+def xavier(param):
+    nn.init.xavier_uniform(param)
+
+
+def weights_init(m):
+    if isinstance(m, nn.Conv2d):
+        xavier(m.weight.data)
+        m.bias.data.zero_()
+
 class SSD(nn.Module):
     """Single Shot Multibox Architecture
     The network is composed of a base VGG network followed by the
@@ -50,6 +59,31 @@ class SSD(nn.Module):
             self.softmax = nn.Softmax(dim=-1)
             self.detect = Detect(num_classes, 0, 200, 0.01, 0.45)
 
+        # feature fuse layers
+        # fuse conv4_3 and conv5_3 feature map for improved small object detection
+        # layer for deconv of conv5_3 to match dim of conv4_3
+        self.fuse_deconv_53 = nn.ConvTranspose2d(512, 512,
+                                                 kernel_size=2, stride=2)
+        self.fuse_deconv_53.apply(weights_init)
+        if batch_norm:
+            self.bn_fuse_deconv_53 = nn.BatchNorm2d(512)
+        # init the deconv layer with bilinear upsampling
+        # TODO: how?
+
+        self.fuse_conv_53 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+        self.fuse_conv_53.apply(weights_init)
+        if batch_norm:
+            self.bn_fuse_conv_53 = nn.BatchNorm2d(512)
+        # L2 norm for fuse_conv_53
+        self.L2Norm_53 = L2Norm(512, 10)
+
+        # extra conv for conf4_3 for efficient fusing of fuse_conv5_3
+        self.fuse_conv_43 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+        self.fuse_conv_43.apply(weights_init)
+        if batch_norm:
+            self.bn_fuse_conv_43 = nn.BatchNorm2d(512)
+
+
     def forward(self, x):
         """Applies network layers and ops on input image(s) x.
 
@@ -81,13 +115,47 @@ class SSD(nn.Module):
             idx_until_conv4_3 = 33
         for k in range(idx_until_conv4_3):
             x = self.vgg[k](x)
+        x_conv43 = x
 
-        s = self.L2Norm(x)
+        # apply vgg up to conv4_3 relu
+        if self.batch_norm is False:
+            idx_until_conv5_3 = 30
+        elif self.batch_norm is True:
+            idx_until_conv5_3 = 43
+        for k in range(idx_until_conv4_3, idx_until_conv5_3 - 1):
+            x = self.vgg[k](x)
+        x_conv53 = self.vgg[idx_until_conv5_3](x)
+
+        # now x_conv43 is conv_43 and x_conv53 is conv_53
+
+        # apply extra fusion conv at conv4_3
+        fuse_conv43 = self.fuse_conv_43(x_conv43)
+        if self.batch_norm:
+            fuse_conv43 = self.bn_fuse_conv_43(fuse_conv43)
+
+        # apply deconv & extra fusion conv at conv5_3
+        fuse_deconv53 = self.fuse_deconv_53(x_conv53)
+        if self.batch_norm:
+            fuse_deconv53 = self.bn_fuse_deconv_53(fuse_deconv53)
+        fuse_conv53 = self.fuse_conv_53(fuse_deconv53)
+        if self.batch_norm:
+            fuse_conv53 = self.bn_fuse_deconv_53(fuse_conv53)
+
+        # apply L2norm at each fused convs
+        l2_fuse_conv43 = self.L2Norm(fuse_conv43)
+        l2_fuse_conv53 = self.L2Norm_53(fuse_conv53)
+
+        # apply sum and final relu to create source
+        s = F.relu(l2_fuse_conv43 + l2_fuse_conv53, inplace=True)
+
         # TODO: append lower level features
         sources.append(s)
 
+        # fuse done, keep forward back from conv5_3
+        x = x_conv53
+
         # apply vgg up to fc7
-        for k in range(idx_until_conv4_3, len(self.vgg)):
+        for k in range(idx_until_conv5_3, len(self.vgg)):
             x = self.vgg[k](x)
         sources.append(x)
 
