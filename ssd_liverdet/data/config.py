@@ -63,6 +63,29 @@ v2_custom_512 = {
     'name': 'v2_custom_512',
 }
 
+# 512 config from https://github.com/qijiezhao/pytorch-ssd/blob/463114fb0c988d5c5d954d4f015688c12e6fa697/data/config.py
+# newer version: use additional conv12_2 layer as last layer before multibox layers
+v2_512 = {
+
+    'feature_maps': [64, 32, 16, 8, 4, 2, 1],
+
+    'min_dim': 512,
+
+    'steps': [8, 16, 32, 64, 128, 256, 512],
+
+    'min_sizes': [20, 51, 133, 215, 296, 378, 460],
+
+    'max_sizes': [51, 133, 215, 296, 378, 460, 542],
+
+    'aspect_ratios': [[2], [2, 3], [2, 3], [2, 3], [2, 3], [2], [2]],
+
+    'variance': [0.1, 0.2],
+
+    'clip': True,
+
+    'name': 'v2_512',
+}
+
 #SSD300 CONFIGS
 # newer version: use additional conv11_2 layer as last layer before multibox layers
 v2 = {
