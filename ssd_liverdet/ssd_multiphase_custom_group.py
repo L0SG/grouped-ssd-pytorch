@@ -69,61 +69,61 @@ class SSD(nn.Module):
             self.fuse_11.apply(weights_init)
             if batch_norm:
                 self.bn_fuse_11 = nn.BatchNorm2d(512*feature_scale)
-            self.fuse_12 = nn.Conv2d(512*feature_scale, 512*feature_scale, kernel_size=1)
-            self.fuse_12.apply(weights_init)
-            if batch_norm:
-                self.bn_fuse_12 = nn.BatchNorm2d(512*feature_scale)
+            # self.fuse_12 = nn.Conv2d(512*feature_scale, 512*feature_scale, kernel_size=1)
+            # self.fuse_12.apply(weights_init)
+            # if batch_norm:
+            #     self.bn_fuse_12 = nn.BatchNorm2d(512*feature_scale)
 
             self.fuse_21 = nn.Conv2d(1024*feature_scale, 1024*feature_scale, kernel_size=1)
             self.fuse_21.apply(weights_init)
             if batch_norm:
                 self.bn_fuse_21 = nn.BatchNorm2d(1024*feature_scale)
-            self.fuse_22 = nn.Conv2d(1024*feature_scale, 1024*feature_scale, kernel_size=1)
-            self.fuse_22.apply(weights_init)
-            if batch_norm:
-                self.bn_fuse_22 = nn.BatchNorm2d(1024*feature_scale)
+            # self.fuse_22 = nn.Conv2d(1024*feature_scale, 1024*feature_scale, kernel_size=1)
+            # self.fuse_22.apply(weights_init)
+            # if batch_norm:
+            #     self.bn_fuse_22 = nn.BatchNorm2d(1024*feature_scale)
 
             self.fuse_31 = nn.Conv2d(512*feature_scale, 512*feature_scale, kernel_size=1)
             self.fuse_31.apply(weights_init)
             if batch_norm:
                 self.bn_fuse_31 = nn.BatchNorm2d(512*feature_scale)
-            self.fuse_32 = nn.Conv2d(512*feature_scale, 512*feature_scale, kernel_size=1)
-            self.fuse_31.apply(weights_init)
-            if batch_norm:
-                self.bn_fuse_32 = nn.BatchNorm2d(512*feature_scale)
+            # self.fuse_32 = nn.Conv2d(512*feature_scale, 512*feature_scale, kernel_size=1)
+            # self.fuse_32.apply(weights_init)
+            # if batch_norm:
+            #     self.bn_fuse_32 = nn.BatchNorm2d(512*feature_scale)
 
             self.fuse_41 = nn.Conv2d(256*feature_scale, 256*feature_scale, kernel_size=1)
             self.fuse_41.apply(weights_init)
             if batch_norm:
                 self.bn_fuse_41 = nn.BatchNorm2d(256*feature_scale)
-            self.fuse_42 = nn.Conv2d(256*feature_scale, 256*feature_scale, kernel_size=1)
-            self.fuse_42.apply(weights_init)
-            if batch_norm:
-                self.bn_fuse_42 = nn.BatchNorm2d(256*feature_scale)
+            # self.fuse_42 = nn.Conv2d(256*feature_scale, 256*feature_scale, kernel_size=1)
+            # self.fuse_42.apply(weights_init)
+            # if batch_norm:
+            #     self.bn_fuse_42 = nn.BatchNorm2d(256*feature_scale)
 
             self.fuse_51 = nn.Conv2d(256*feature_scale, 256*feature_scale, kernel_size=1)
             self.fuse_51.apply(weights_init)
             if batch_norm:
                 self.bn_fuse_51 = nn.BatchNorm2d(256*feature_scale)
-            self.fuse_52 = nn.Conv2d(256*feature_scale, 256*feature_scale, kernel_size=1)
-            self.fuse_52.apply(weights_init)
-            if batch_norm:
-                self.bn_fuse_52 = nn.BatchNorm2d(256*feature_scale)
+            # self.fuse_52 = nn.Conv2d(256*feature_scale, 256*feature_scale, kernel_size=1)
+            # self.fuse_52.apply(weights_init)
+            # if batch_norm:
+            #     self.bn_fuse_52 = nn.BatchNorm2d(256*feature_scale)
 
             self.fuse_61 = nn.Conv2d(256*feature_scale, 256*feature_scale, kernel_size=1)
             self.fuse_61.apply(weights_init)
             if batch_norm:
                 self.bn_fuse_61 = nn.BatchNorm2d(256*feature_scale)
-            self.fuse_62 = nn.Conv2d(256*feature_scale, 256*feature_scale, kernel_size=1)
-            self.fuse_62.apply(weights_init)
-            if batch_norm:
-                self.bn_fuse_62 = nn.BatchNorm2d(256*feature_scale)
+            # self.fuse_62 = nn.Conv2d(256*feature_scale, 256*feature_scale, kernel_size=1)
+            # self.fuse_62.apply(weights_init)
+            # if batch_norm:
+            #     self.bn_fuse_62 = nn.BatchNorm2d(256*feature_scale)
 
             self.fuse_list1 = nn.ModuleList([self.fuse_31, self.fuse_41, self.fuse_51, self.fuse_61])
-            self.fuse_list2 = nn.ModuleList([self.fuse_32, self.fuse_42, self.fuse_52, self.fuse_62])
+            # self.fuse_list2 = nn.ModuleList([self.fuse_32, self.fuse_42, self.fuse_52, self.fuse_62])
             if batch_norm:
                 self.bn_fuse_list1 = nn.ModuleList([self.bn_fuse_31, self.bn_fuse_41, self.bn_fuse_51, self.bn_fuse_61])
-                self.bn_fuse_list2 = nn.ModuleList([self.bn_fuse_32, self.bn_fuse_42, self.bn_fuse_52, self.bn_fuse_62])
+                # self.bn_fuse_list2 = nn.ModuleList([self.bn_fuse_32, self.bn_fuse_42, self.bn_fuse_52, self.bn_fuse_62])
 
 
 
@@ -160,15 +160,15 @@ class SSD(nn.Module):
         for k in range(idx_until_conv4_3):
             x = self.vgg[k](x)
         # TODO: l2normed x or just x?
-        #s = self.L2Norm(x)
-        s = x
+        s = self.L2Norm(x)
+        #s = x
         if use_fuseconv:
             if self.batch_norm:
                 s = F.relu(self.bn_fuse_11(self.fuse_11(s)), inplace=True)
-                s = F.relu(self.bn_fuse_12(self.fuse_12(s)), inplace=True)
+                # s = F.relu(self.bn_fuse_12(self.fuse_12(s)), inplace=True)
             else:
                 s = F.relu(self.fuse_11(s), inplace=True)
-                s = F.relu(self.fuse_12(s), inplace=True)
+                # s = F.relu(self.fuse_12(s), inplace=True)
         sources.append(s)
 
         # apply vgg up to fc7
@@ -178,10 +178,10 @@ class SSD(nn.Module):
         if use_fuseconv:
             if self.batch_norm:
                 s2 = F.relu(self.bn_fuse_21(self.fuse_21(s2)), inplace=True)
-                s2 = F.relu(self.bn_fuse_22(self.fuse_22(s2)), inplace=True)
+                # s2 = F.relu(self.bn_fuse_22(self.fuse_22(s2)), inplace=True)
             else:
                 s2 = F.relu(self.fuse_21(s2), inplace=True)
-                s2 = F.relu(self.fuse_22(s2), inplace=True)
+                # s2 = F.relu(self.fuse_22(s2), inplace=True)
 
         sources.append(s2)
 
@@ -195,7 +195,7 @@ class SSD(nn.Module):
                     s_extra = x
                     if use_fuseconv:
                         s_extra = F.relu(self.fuse_list1[fuse_counter](s_extra), inplace=True)
-                        s_extra = F.relu(self.fuse_list2[fuse_counter](s_extra), inplace=True)
+                        # s_extra = F.relu(self.fuse_list2[fuse_counter](s_extra), inplace=True)
                         fuse_counter += 1
                     sources.append(s_extra)
         elif self.batch_norm is True:
@@ -208,7 +208,7 @@ class SSD(nn.Module):
                     s_extra = x
                     if use_fuseconv:
                         s_extra = F.relu(self.bn_fuse_list1[fuse_counter](self.fuse_list1[fuse_counter](s_extra)), inplace=True)
-                        s_extra = F.relu(self.bn_fuse_list2[fuse_counter](self.fuse_list2[fuse_counter](s_extra)), inplace=True)
+                        # s_extra = F.relu(self.bn_fuse_list2[fuse_counter](self.fuse_list2[fuse_counter](s_extra)), inplace=True)
                         fuse_counter += 1
                     sources.append(s_extra)
 
