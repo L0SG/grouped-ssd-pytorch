@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 from layers import *
-from data import v2
+from data import v2_512
 import os
 
 GROUPS_VGG = 4
@@ -43,7 +43,7 @@ class SSD(nn.Module):
         self.num_classes = num_classes
         self.batch_norm = batch_norm
         # TODO: implement __call__ in PriorBox
-        self.priorbox = PriorBox(v2)
+        self.priorbox = PriorBox(v2_512)
         self.priors = Variable(self.priorbox.forward(), volatile=True)
         self.size = 512
 
@@ -118,11 +118,15 @@ class SSD(nn.Module):
             # self.fuse_62.apply(weights_init)
             # if batch_norm:
             #     self.bn_fuse_62 = nn.BatchNorm2d(256*feature_scale)
+            self.fuse_71 = nn.Conv2d(256 * feature_scale, 256 * feature_scale, kernel_size=1)
+            self.fuse_71.apply(weights_init)
+            if batch_norm:
+                self.bn_fuse_71 = nn.BatchNorm2d(256 * feature_scale)
 
-            self.fuse_list1 = nn.ModuleList([self.fuse_31, self.fuse_41, self.fuse_51, self.fuse_61])
+            self.fuse_list1 = nn.ModuleList([self.fuse_31, self.fuse_41, self.fuse_51, self.fuse_61, self.fuse_71])
             # self.fuse_list2 = nn.ModuleList([self.fuse_32, self.fuse_42, self.fuse_52, self.fuse_62])
             if batch_norm:
-                self.bn_fuse_list1 = nn.ModuleList([self.bn_fuse_31, self.bn_fuse_41, self.bn_fuse_51, self.bn_fuse_61])
+                self.bn_fuse_list1 = nn.ModuleList([self.bn_fuse_31, self.bn_fuse_41, self.bn_fuse_51, self.bn_fuse_61, self.bn_fuse_71])
                 # self.bn_fuse_list2 = nn.ModuleList([self.bn_fuse_32, self.bn_fuse_42, self.bn_fuse_52, self.bn_fuse_62])
 
 
@@ -365,11 +369,8 @@ def build_ssd(phase, size=300, num_classes=21, batch_norm=False):
     if phase != "test" and phase != "train":
         print("Error: Phase not recognized")
         return
-    if size != 300:
-        print("Error: Sorry only SSD300 is supported currently!")
-        return
 
     # change the input channel from i=3 to 12
     return SSD(phase, *multibox(vgg(base[str(size)], i=12, batch_norm=batch_norm),
-                                add_extras(extras[str(size)], 1024 * feature_scale, batch_norm),
+                                add_extras(extras[str(size)], size, 1024 * feature_scale, batch_norm),
                                 mbox[str(size)], num_classes, batch_norm), num_classes, batch_norm)
