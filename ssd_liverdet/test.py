@@ -13,7 +13,7 @@ from PIL import Image
 from data import FISHdetection, BaseTransform
 from utils.augmentations import SSDAugmentation
 import torch.utils.data as data
-from ssd_multiphase_custom import build_ssd
+from ssd_multiphase_custom_group import build_ssd
 import numpy as np
 import h5py
 from layers.box_utils import nms
@@ -23,11 +23,11 @@ from PIL import Image
 from sklearn.model_selection import train_test_split, KFold
 
 parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
-parser.add_argument('--trained_model', default='/home/tkdrlf9202/PycharmProjects/liver_segmentation/ssd_liverdet/weights/ssd300_allgroup_vanilla_BN_CV0_10000.pth',
+parser.add_argument('--trained_model', default='weights/ssd300_group_vanilla_BN_fusex1only10000_CV3.pth',
                     type=str, help='Trained state_dict file path to open')
 parser.add_argument('--save_folder', default='eval/', type=str,
                     help='Dir to save results')
-parser.add_argument('--visual_threshold', default=0.5, type=float,
+parser.add_argument('--visual_threshold', default=0.3, type=float,
                     help='Final confidence threshold')
 parser.add_argument('--cuda', default=True, type=bool,
                     help='Use cuda to train model')
@@ -47,7 +47,8 @@ def test_net(save_folder, net, cuda, testset, transform, thresh):
         print('Testing image {:d}/{:d}....'.format(idx+1, num_images))
         # pull img & annotations
         img = testset.pull_image(idx)
-        annotation = [testset.pull_anno(idx)]
+        # only use portal phase annotation
+        annotation = [[testset.pull_anno(idx)][0][2]]
         # base transform the image and permute to [phase, channel, h, w] and flatten to [1, channel, h, w]
         x = torch.from_numpy(transform(img)[0]).permute(0, 3, 1, 2).contiguous()
         x = x.view(-1, x.shape[2], x.shape[3])
@@ -66,6 +67,8 @@ def test_net(save_folder, net, cuda, testset, transform, thresh):
         scale = torch.Tensor([img.shape[2], img.shape[1],
                              img.shape[2], img.shape[1]])
         pred_num = 0
+
+        coords_list = []
         # skip background class (0) with range start of 1
         for i in range(1, detections.size(1)):
             j = 0
@@ -77,45 +80,49 @@ def test_net(save_folder, net, cuda, testset, transform, thresh):
 #                label_name = labelmap[i-1]
                 pt = (detections[0, i, j, 1:]*scale).cpu().numpy()
                 coords = (pt[0], pt[1], pt[2], pt[3])
+                coords_list.append(coords)
                 pred_num += 1
                 with open(filename, mode='a') as f:
                     f.write(str(pred_num)+' label: lesion ' + ' score: ' +
                             str(score) + ' '+' || '.join(str(c) for c in coords) + '\n')
                 j += 1
-
         # calculate gt & pred bbox coords
         # (x, y) start & delta of ground truth
         xs_gt, ys_gt = annotation[0][0], annotation[0][1]
         xd_gt, yd_gt = annotation[0][2] - xs_gt, annotation[0][3] - ys_gt
-        # (y, x) start & delta of prediction
-        # do it only if the prediction exist
-        if 'coords' in locals():
-            xs_p, ys_p = int(coords[0]), int(coords[1])
-            xd_p, yd_p = int(coords[2]) - xs_p, int(coords[3]) - ys_p
-        """
+
         # visualization: draw gt & predicted bounding box and save to image
-        output_image = img.copy()
-        fig, ax = plt.subplots(1)
-        ax.imshow(output_image)
+        # use portal phase (idx=2 at dim=0) and middle slice (idx=1 at dim=3)
+        output_image = img[2, :, :, 1].copy()
+        fig, ax = plt.subplots()
+        ax.imshow(output_image, cmap='gray')
+        plt.axis('off')
+
         # green gt box
         rect_gt = patches.Rectangle((xs_gt, ys_gt), xd_gt, yd_gt, linewidth=1, edgecolor='g', facecolor='none')
         ax.add_patch(rect_gt)
+
         # red pred box
+        # (y, x) start & delta of prediction
+        # do it only if the prediction exist
         if 'coords' in locals():
-            rect_p = patches.Rectangle((xs_p, ys_p), xd_p, yd_p, linewidth=1, edgecolor='r', facecolor='none')
-            ax.add_patch(rect_p)
+            for idx in range(len(coords_list)):
+                xs_p, ys_p = int(coords_list[idx][0]), int(coords_list[idx][1])
+                xd_p, yd_p = int(coords_list[idx][2]) - xs_p, int(coords_list[idx][3]) - ys_p
+                rect_p = patches.Rectangle((xs_p, ys_p), xd_p, yd_p, linewidth=1, edgecolor='r', facecolor='none')
+                ax.add_patch(rect_p)
         plt.savefig(os.path.join(args.save_folder, 'test_'+str(idx)+'.png'))
         plt.close()
-        """
+
 
 
 if __name__ == '__main__':
     """"########## Data Loading & dimension matching ##########"""
     # load custom CT dataset
-    datapath = '/home/vision/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
+    datapath = '/home/preskim/git/SSD/lesion_dataset_4phase_aligned.h5'
     train_sets = [('liver_lesion')]
     cross_validation = 5
-    cv_idx_for_test = 0
+    cv_idx_for_test = 3
 
     def load_lesion_dataset(data_path):
         """
