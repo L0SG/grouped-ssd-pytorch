@@ -55,7 +55,7 @@ class PriorBox(object):
                         mean += [cx, cy, s_k*sqrt(ar), s_k/sqrt(ar)]
                         mean += [cx, cy, s_k/sqrt(ar), s_k*sqrt(ar)]
 
-        elif self.version == 'v2_custom':
+        elif self.version == 'v2_custom' or self.version == 'v2_custom_squareonly':
             for k, f in enumerate(self.feature_maps):
                 for i, j in product(range(f), repeat=2):
                     f_k = self.image_size / self.steps[k]

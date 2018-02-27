@@ -11,7 +11,7 @@ import torch.utils.data as data
 from data import FISHdetection, detection_collate, v2, v1, BaseTransform
 from utils.augmentations import SSDAugmentation
 from layers.modules import MultiBoxLoss
-from ssd_multiphase_custom_group import build_ssd
+from ssd_multiphase_custom import build_ssd
 import numpy as np
 import time
 import h5py
@@ -90,7 +90,7 @@ if args.visdom:
 
 """"########## Data Loading & dimension matching ##########"""
 # load custom CT dataset
-datapath = '/home/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
+datapath = '/home/vision/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
 train_sets = [('liver_lesion')]
 
 
@@ -204,14 +204,14 @@ for idx in range(cross_validation):
     net_cv.append(copy.deepcopy(net))
     optimizer_cv.append(optim.SGD(net_cv[idx].parameters(), lr=args.lr,
                                   momentum=args.momentum, weight_decay=args.weight_decay))
-criterion = MultiBoxLoss(num_classes, 0.5, True, 0, True, 2, 0.5, False, args.cuda)
+criterion = MultiBoxLoss(num_classes, 0.5, True, 0, True, 1, 0.5, False, args.cuda)
 del net
 """#########################################################"""
 
 # create train & valid log text file
-f_train = open('train_log_ssd300_group_vanilla_BN_fusex1only_2negpos.txt', 'w')
+f_train = open('train_log_ssd300_allconv_squareonly_BN.txt', 'w')
 f_train.write('iteration\tloss\tloc_loss\tconf_loss\n')
-f_valid = open('valid_log_ssd300_group_vanilla_BN_fusex1only_2negpos.txt', 'w')
+f_valid = open('valid_log_ssd300_allconv_squareonly_BN.txt', 'w')
 f_valid.write('iteration\tloss\tloc_loss\tconf_loss\tAP\n')
 
 def train():
@@ -469,7 +469,7 @@ def train():
         if iteration % 1000 == 0:
             print('Saving state, iter:', iteration)
             for idx in range(cross_validation):
-                torch.save(net_cv[idx].state_dict(), 'weights/ssd300_group_vanilla_BN_fusex1only_2negpos' + str(iteration) + '_CV' +
+                torch.save(net_cv[idx].state_dict(), 'weights/ssd300_allconv_squareonly_BN' + str(iteration) + '_CV' +
                            str(idx) + '.pth')
     # torch.save(net[idx].state_dict(), args.save_folder + '' + args.version + '.pth')
 
