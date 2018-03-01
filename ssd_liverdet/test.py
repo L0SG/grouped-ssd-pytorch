@@ -21,9 +21,10 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from PIL import Image
 from sklearn.model_selection import train_test_split, KFold
+import time
 
 parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
-parser.add_argument('--trained_model', default='weights/ssd300_group_vanilla_BN_fusex1only10000_CV3.pth',
+parser.add_argument('--trained_model', default='weights/ssd300_group_vanilla_BN_fusex1only_3negpos10000_CV3.pth',
                     type=str, help='Trained state_dict file path to open')
 parser.add_argument('--save_folder', default='eval/', type=str,
                     help='Dir to save results')
@@ -44,7 +45,6 @@ def test_net(save_folder, net, cuda, testset, transform, thresh):
     filename = save_folder+'test1.txt'
     num_images = len(testset)
     for idx in range(num_images):
-        print('Testing image {:d}/{:d}....'.format(idx+1, num_images))
         # pull img & annotations
         img = testset.pull_image(idx)
         # only use portal phase annotation
@@ -60,8 +60,12 @@ def test_net(save_folder, net, cuda, testset, transform, thresh):
                 f.write('label: '+' || '.join(str(b) for b in box)+'\n')
         if cuda:
             x = x.cuda()
-
+        # tic
+        t = time.time()
         y = net(x)      # forward pass
+        # toc
+        elapsed = time.time() - t
+        print('Testing image {:d}/{:d}...inference time: {:f}'.format(idx + 1, num_images, elapsed))
         detections = y.data
         # scale each detection back up to the image
         scale = torch.Tensor([img.shape[2], img.shape[1],
