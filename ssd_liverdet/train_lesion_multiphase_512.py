@@ -28,7 +28,7 @@ parser = argparse.ArgumentParser(description='Single Shot MultiBox Detector Trai
 parser.add_argument('--version', default='v2', help='conv11_2(v2) or pool6(v1) as last layer')
 parser.add_argument('--basenet', default='vgg16_reducedfc.pth', help='pretrained base model')
 parser.add_argument('--jaccard_threshold', default=0.5, type=float, help='Min Jaccard index for matching')
-parser.add_argument('--batch_size', default=8, type=int, help='Batch size for training')
+parser.add_argument('--batch_size', default=16, type=int, help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str, help='Resume from checkpoint')
 parser.add_argument('--num_workers', default=1, type=int, help='Number of workers used in dataloading')
 # parser.add_argument('--iterations', default=120000, type=int, help='Number of training iterations')
@@ -65,11 +65,14 @@ batch_size = args.batch_size
 #iter_size = accum_batch_size / batch_size
 max_iter = 10001
 weight_decay = 0.0005
-stepvalues = (2000, 5000)
+stepvalues = (5000, 8000)
 gamma = 0.1
 momentum = 0.9
 # use batchnorm for vgg & extras
 batch_norm = True
+
+# OHNM (online hard neg mining) ratio (pos:neg = 1:x)
+ohnm_neg_ratio = 1
 
 # data augmentation hyperparams
 gt_pixel_jitter = 0.01
@@ -80,6 +83,9 @@ cross_validation = 5
 
 # ap hyperparam
 confidence_threshold = 0.01
+
+# string for output & weight name logging
+output_string = 'ssd512_group_vanilla_BN_10CV'
 """#########################################################"""
 
 
@@ -90,7 +96,7 @@ if args.visdom:
 
 """"########## Data Loading & dimension matching ##########"""
 # load custom CT dataset
-datapath = '/home/preskim/git/SSD/lesion_dataset_4phase_aligned.h5'
+datapath = '/home/vision/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
 train_sets = [('liver_lesion')]
 
 
@@ -202,17 +208,16 @@ net_cv = []
 optimizer_cv = []
 for idx in range(cross_validation):
     net_cv.append(copy.deepcopy(net))
-    #optimizer_cv.append(optim.Adam(net_cv[idx].parameters(), eps=0.1, weight_decay=args.weight_decay))
     optimizer_cv.append(optim.SGD(net_cv[idx].parameters(), lr=args.lr,
                                   momentum=args.momentum, weight_decay=args.weight_decay))
-criterion = MultiBoxLoss(num_classes, 0.5, True, 0, True, 1, 0.5, False, args.cuda)
+criterion = MultiBoxLoss(num_classes, 0.5, True, 0, True, ohnm_neg_ratio, 0.5, False, args.cuda)
 del net
 """#########################################################"""
 
 # create train & valid log text file
-f_train = open('train_log_ssd512_group_vanilla_BN.txt', 'w')
+f_train = open('train_log_' + output_string + '.txt', 'w')
 f_train.write('iteration\tloss\tloc_loss\tconf_loss\n')
-f_valid = open('valid_log_ssd512_group_vanilla_BN.txt', 'w')
+f_valid = open('valid_log_' + output_string + '.txt', 'w')
 f_valid.write('iteration\tloss\tloc_loss\tconf_loss\tAP\n')
 
 def train():
@@ -470,7 +475,7 @@ def train():
         if iteration % 1000 == 0:
             print('Saving state, iter:', iteration)
             for idx in range(cross_validation):
-                torch.save(net_cv[idx].state_dict(), 'weights/ssd512_group_vanilla_BN' + str(iteration) + '_CV' +
+                torch.save(net_cv[idx].state_dict(), 'weights/' + output_string + str(iteration) + '_CV' +
                            str(idx) + '.pth')
     # torch.save(net[idx].state_dict(), args.save_folder + '' + args.version + '.pth')
 

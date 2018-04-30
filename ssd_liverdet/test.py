@@ -123,7 +123,7 @@ def test_net(save_folder, net, cuda, testset, transform, thresh):
 if __name__ == '__main__':
     """"########## Data Loading & dimension matching ##########"""
     # load custom CT dataset
-    datapath = '/home/preskim/git/SSD/lesion_dataset_4phase_aligned.h5'
+    datapath = '/home/vision/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
     train_sets = [('liver_lesion')]
     cross_validation = 5
     cv_idx_for_test = 3
