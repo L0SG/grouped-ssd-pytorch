@@ -30,7 +30,7 @@ parser.add_argument('--basenet', default='vgg16_reducedfc.pth', help='pretrained
 parser.add_argument('--jaccard_threshold', default=0.5, type=float, help='Min Jaccard index for matching')
 parser.add_argument('--batch_size', default=16, type=int, help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str, help='Resume from checkpoint')
-parser.add_argument('--num_workers', default=1, type=int, help='Number of workers used in dataloading')
+parser.add_argument('--num_workers', default=0, type=int, help='Number of workers used in dataloading')
 # parser.add_argument('--iterations', default=120000, type=int, help='Number of training iterations')
 parser.add_argument('--start_iter', default=0, type=int, help='Begin counting iterations starting from this value (should be used with resume)')
 parser.add_argument('--cuda', default=True, type=str2bool, help='Use cuda to train model')
@@ -79,24 +79,24 @@ gt_pixel_jitter = 0.01
 expand_ratio = 1.5
 
 # CV hyperparams
-cross_validation = 10
+cross_validation = 5
 
 # ap hyperparam
 confidence_threshold = 0.01
 
 # string for output & weight name logging
-output_string = 'ssd300_group_vanilla_BN_10CV'
+output_string = 'ssd300_group_vanilla_BN_ohnm11'
 """#########################################################"""
 
 
 if args.visdom:
     import visdom
-    viz = visdom.Visdom()
+    viz = visdom.Visdom(port=9999)
 
 
 """"########## Data Loading & dimension matching ##########"""
 # load custom CT dataset
-datapath = '/home/vision/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
+datapath = '/home/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
 train_sets = [('liver_lesion')]
 
 
@@ -219,6 +219,7 @@ f_train = open('train_log_' + output_string + '.txt', 'w')
 f_train.write('iteration\tloss\tloc_loss\tconf_loss\n')
 f_valid = open('valid_log_' + output_string + '.txt', 'w')
 f_valid.write('iteration\tloss\tloc_loss\tconf_loss\tAP\n')
+
 
 def train():
     # loss counters

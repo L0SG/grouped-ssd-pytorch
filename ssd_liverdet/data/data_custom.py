@@ -1,6 +1,10 @@
 # for arbitrary image dataset
 # courtesy of https://github.com/amdegroot/ssd.pytorch/issues/72
 
+# # for debugging perf hotspot
+# from line_profiler import LineProfiler
+# from utils import augmentations
+
 import os
 import os.path
 import sys
@@ -79,7 +83,8 @@ class FISHdetection(data.Dataset):
         # TODO: double-check new implementations are corrent
         # img_id = self.ids[index]
 
-        img_path = self.image_paths[index]
+        #img_path = self.image_paths[index]
+        img = self.image_paths[index]
         # target = ET.parse(self._annopath % img_id).getroot()
         target = self.image_annots[index]
         target = np.asarray(target).reshape(-1, 5)
@@ -87,7 +92,9 @@ class FISHdetection(data.Dataset):
         try:
             #img = cv2.imread(img_path)
             # input img_path is already numpy
-            img = img_path
+            # this is unnecessary overhead
+            # img = img_path
+
             # single phase image
             if len(img.shape) == 3:
                 height, width, channels = img.shape
@@ -103,7 +110,7 @@ class FISHdetection(data.Dataset):
 
 
         if self.transform is not None:
-            target = np.array(target)
+            #target = np.array(target)
             """
             # multi-phase data have 4 ground truth
             # randomly select one target
@@ -131,6 +138,24 @@ class FISHdetection(data.Dataset):
                 x_min, x_max = x_min/width, x_max/width
                 y_min, y_max = y_min/height, y_max/height
                 target[idx] = np.array([x_min, y_min, x_max, y_max, cls])
+
+            # # debug hotspot
+            # lp = LineProfiler()
+            # lp.add_function(augmentations.ConvertFromInts.__call__)
+            # lp.add_function(augmentations.ToAbsoluteCoords.__call__)
+            # lp.add_function(augmentations.PixelJitter.__call__)
+            # lp.add_function(augmentations.PhotometricDistort.__call__)
+            # lp.add_function(augmentations.Expand.__call__)
+            # lp.add_function(augmentations.RandomSampleCrop.__call__)
+            # lp.add_function(augmentations.RandomMirror.__call__)
+            # lp.add_function(augmentations.ToPercentCoords.__call__)
+            # lp.add_function(augmentations.Resize.__call__)
+            # lp.add_function(augmentations.SubtractMeans.__call__)
+            # lp_wrapper = lp(self.transform.__call__)
+            # lp_wrapper(img, target[:, :4], target[:, 4])
+            # lp.print_stats()
+            # exit()
+
             img, boxes, labels = self.transform(img, target[:, :4], target[:, 4])
             """ our data is not rgb
             # to rgb

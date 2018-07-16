@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 from layers import *
-from data import v2_custom_squareonly
+from data import v2
 import os
 
 GROUPS_VGG = 1
@@ -32,7 +32,7 @@ class SSD(nn.Module):
         self.num_classes = num_classes
         self.batch_norm = batch_norm
         # TODO: implement __call__ in PriorBox
-        self.priorbox = PriorBox(v2_custom_squareonly)
+        self.priorbox = PriorBox(v2)
         self.priors = Variable(self.priorbox.forward(), volatile=True)
         self.size = 300
 
