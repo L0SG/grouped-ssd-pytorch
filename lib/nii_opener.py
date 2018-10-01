@@ -4,7 +4,7 @@ import nibabel as nib
 from nibabel.orientations import flip_axis
 import scipy.misc
 
-img = nib.load('/home/tkdrlf9202/Datasets/snuh_HCC_sample_1807/MEDIP/HCC_1106.nii')
+img = nib.load('/home/tkdrlf9202/Datasets/snuh_HCC_sample_1807/nii_DEEPHI/HCC_1106/HCC_1106.nii')
 
 #%% get tensor data
 data = img.get_fdata()
