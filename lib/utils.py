@@ -1,4 +1,4 @@
-import dicom
+import pydicom as dicom
 import os
 import numpy as np
 import glob
@@ -20,9 +20,9 @@ def read_dicom_series(directory, filepattern="P_*"):
 
     if not os.path.exists(directory) or not os.path.isdir(directory):
         raise ValueError("Given directory does not exist or is a file : " + str(directory))
-    print('\tRead Dicom', directory)
+    # print('\tRead Dicom', directory)
     lstFilesDCM = natsort.natsorted(glob.glob(os.path.join(directory, filepattern)))
-    print('\tLength dicom series', len(lstFilesDCM))
+    # print('\tLength dicom series', len(lstFilesDCM))
     # Get ref file
     RefDs = dicom.read_file(lstFilesDCM[0])
     # Load dimensions based on the number of rows, columns, and slices (along the Z axis)
@@ -55,6 +55,9 @@ def read_liver_seg_masks_raw(masks_dirname, img_shape):
     shape_raw = np.array(img_shape)
     order = [2, 0, 1]
     shape_raw = shape_raw[order]
+    num_slice = rawfile.shape[0] / shape_raw[1] / shape_raw[2]
+    print(os.path.basename(masks_dirname) + ' slices raw vs dicom: ' + str(num_slice) + ' '+ str(shape_raw[0]))
+
     label_volume = rawfile.reshape(shape_raw)
     label_volume = label_volume.transpose([1, 2, 0])
 
