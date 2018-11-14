@@ -13,8 +13,10 @@ import numpy as np
 import os
 import glob
 
-data_path = '/media/hdd/tkdrlf9202/Datasets/liver_lesion'
-ct_path = os.path.join(data_path, 'ct')
+data_path = '/home/tkdrlf9202/Datasets/liver_year1_dataset_extended_1809/dicom_image'
+#ct_path = os.path.join(data_path, 'ct')
+# year1 extended data hack, 181031
+ct_path = data_path
 roi_image_path = os.path.join(data_path, 'roi_image')
 
 # rename CT dataset phases to have consistent name (A, D, P, Pre)
@@ -53,6 +55,9 @@ for subject in glob.glob(os.path.join(ct_path, '*')):
             os.rename(subfolder, os.path.join(subject, 'A'))
 # sort the name list to compare with roi_image folders
 subject_name_list.sort()
+
+###################### end the script for just fixing folder names, 1801031
+print("folder name fixing ended")
 
 subject_name_list_roi = []
 # check roi_image data integrity
