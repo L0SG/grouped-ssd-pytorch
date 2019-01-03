@@ -145,6 +145,12 @@ def printout_to_jpg(images, masks, ids, printout_path):
         # take z_max from 4-phase dicom images
         z_max = max(image[0].shape[2], image[1].shape[2],
                     image[2].shape[2], image[3].shape[2])
+        z_list = [image[0].shape[2], image[1].shape[2], image[2].shape[2], image[3].shape[2]]
+        # assert all z are identical, if not, raise warning
+        try:
+            assert z_list.count(z_list[0]) == len(z_list)
+        except AssertionError:
+            print("WARNING: {} 4-phase has non-matching number of slices".format(dicom_name))
 
         # mask may or may not align with the 4-phase dicom images
         # since we have mask_phasename, align the mask to that specific phase
