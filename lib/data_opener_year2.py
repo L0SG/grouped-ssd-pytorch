@@ -88,7 +88,7 @@ def load_liver_seg_dataset_year2(data_path, num_data_to_load):
         assert dicom_image_before.shape == dicom_image_after.shape
         print(os.path.basename(path_subject) + " min_prect, max_prect, min_ct, max_ct: " + str(np.amin(dicom_image_before)) + ' ' + str(np.amax(dicom_image_before)) + ' ' +
               str(np.amin(dicom_image_after)) + ' ' + str(np.amax(dicom_image_after)))
-
+        """ TODO: 1810 dataset has no labels
         # load mask image of the subject, which needs shape information
         dicom_shape = dicom_image_after.shape[1:]
         mask_path = os.path.join(path_subject, str(dir_name)+'.raw')
@@ -110,42 +110,50 @@ def load_liver_seg_dataset_year2(data_path, num_data_to_load):
         mask_unique_elems = np.unique(mask_image)
         assert len(mask_unique_elems) == len(ground_truth_reference)
         assert sorted(mask_unique_elems) == sorted(ground_truth_reference)
+        """
         # append to list
         list_prect.append(dicom_image_before)
         list_ct.append(dicom_image_after)
-        list_mask.append(mask_image)
+        # list_mask.append(mask_image)
 
 
         # DEBUG ONLY: save dicom & mask images for given directory
         # for checking if the label data has any artifacts
         # save mask data as image
-        mask_image_save_path = '/home/tkdrlf9202/Datasets/liver_mask_image_year2'
+        mask_image_save_path = '/home/tkdrlf9202/Datasets/liver_mask_image_year2_1810'
         if not os.path.exists(os.path.join(mask_image_save_path, str(dir_name))):
             os.makedirs(os.path.join(mask_image_save_path, str(dir_name)))
 
         # take the minimum one: for outputting concatenated image of prect, ct, and mask
-        z_min = min(mask_image.shape[2], dicom_image_before.shape[3])
+        """z_min = min(mask_image.shape[2], dicom_image_before.shape[3])"""
+        z_min = dicom_image_before.shape[3]
 
         for idx in range(z_min):
             cat_slice_save_path = os.path.join(mask_image_save_path, str(dir_name), str(idx)+'.jpg')
-            cat_slice = np.zeros([512, 512*3])
+            cat_slice = np.zeros([512*2, 512*4])
 
-            mask_slice = np.copy(mask_image[:, :, idx])
-            # if 0, stay 0; if 1, convert to 255
-            mask_slice[mask_slice == 1] = 255
-            dicom_slice_before = np.copy(dicom_image_before[2, :, :, idx])
-            dicom_slice_after = np.copy(dicom_image_after[2, :, :, idx])
+            # mask_slice = np.copy(mask_image[:, :, idx])
+            # # if 0, stay 0; if 1, convert to 255
+            # mask_slice[mask_slice == 1] = 255
+            dicom_slice_before = np.copy(dicom_image_before[:, :, :, idx])
+            dicom_slice_after = np.copy(dicom_image_after[:, :, :, idx])
             dicom_slice_before_normalized = (dicom_slice_before - float(np.amin(dicom_slice_before))) / (
                     float(np.amax(dicom_slice_before)) - float(np.amin(dicom_slice_before)))
             dicom_slice_after_normalized = (dicom_slice_after - float(np.amin(dicom_slice_after))) / (
                         float(np.amax(dicom_slice_after)) - float(np.amin(dicom_slice_after)))
             dicom_slice_before_normalized *= 255
             dicom_slice_after_normalized *= 255
-
+            """
             cat_slice[:, 0:512] = dicom_slice_before_normalized
             cat_slice[:, 512:512*2] = dicom_slice_after_normalized
             cat_slice[:, 512*2:] = mask_slice
-
+            """
+            # for displaying all 4 phases
+            dicom_slice_before_normalized = np.split(dicom_slice_before_normalized, 4, axis=0)
+            dicom_slice_after_normalized = np.split(dicom_slice_after_normalized, 4, axis=0)
+            for i in range(4):
+                cat_slice[:512, 512*(i):512*(i+1)] = dicom_slice_before_normalized[i]
+                cat_slice[512:, 512*(i):512*(i+1)] = dicom_slice_after_normalized[i]
             scipy.misc.imsave(cat_slice_save_path, cat_slice)
 
 
@@ -183,7 +191,7 @@ def load_liver_seg_dataset_year2(data_path, num_data_to_load):
     return list_prect, list_ct, list_mask
 
 
-data_path = "/home/tkdrlf9202/Datasets/liver_year2_dataset_1808"
+data_path = "/home/tkdrlf9202/Datasets/liver_year2_dataset_1810"
 prect, ct, mask = load_liver_seg_dataset_year2(data_path, None)
 
 
