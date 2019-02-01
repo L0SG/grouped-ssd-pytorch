@@ -18,6 +18,29 @@ for subject in glob.glob(os.path.join(data_path, '*')):
                       os.path.join(subject, basename_new))
 """
 
+def apply_window(img, window_width, window_level):
+    """
+    apply CT windowing function in radiology terms
+    set upper & lower grey values and clamp the pixels with in the calculated HU bound
+    implemented as: https://radiopaedia.org/articles/windowing-ct
+    # http://radclass.mudr.org/content/hounsfield-units-scale-hu-ct-numbers
+    :param img: raw CT images with shape [4, 512, 512, num_slices] with HU unit
+    :param window_width: window width
+    :param window_level: window level
+    :return:
+    """
+    if np.amin(img) == 0:
+        print("WARNING: This CT image has minimum CT HU of 0. Double check if the windowing function is right")
+        print("WARNING: manually adjusting HU to have minimum value of -1024...")
+        img = np.subtract(img, 1024)
+
+    upper_grey = window_level + (window_width / 2.)
+    lower_grey = window_level - (window_width / 2.)
+
+    img_windowed = np.clip(img, lower_grey, upper_grey)
+
+    return img_windowed
+
 
 def read_liver_seg_masks_raw_year2(masks_dirname, img_shape):
     """
@@ -52,7 +75,7 @@ def read_liver_seg_masks_raw_year2(masks_dirname, img_shape):
     return label_volume
 
 
-def load_liver_seg_dataset_year2(data_path, num_data_to_load):
+def load_liver_seg_dataset_year2(data_path, num_data_to_load, window_width, window_level):
     """
     load the liver dataset
     :param data_path:
@@ -88,6 +111,12 @@ def load_liver_seg_dataset_year2(data_path, num_data_to_load):
         assert dicom_image_before.shape == dicom_image_after.shape
         print(os.path.basename(path_subject) + " min_prect, max_prect, min_ct, max_ct: " + str(np.amin(dicom_image_before)) + ' ' + str(np.amax(dicom_image_before)) + ' ' +
               str(np.amin(dicom_image_after)) + ' ' + str(np.amax(dicom_image_after)))
+
+        # apply HU windowing to the dicom images
+        dicom_image_before = apply_window(dicom_image_before, window_width, window_level)
+        dicom_image_after = apply_window(dicom_image_after, window_width, window_level)
+
+
         """ TODO: 1810 dataset has no labels
         # load mask image of the subject, which needs shape information
         dicom_shape = dicom_image_after.shape[1:]
@@ -192,7 +221,7 @@ def load_liver_seg_dataset_year2(data_path, num_data_to_load):
 
 
 data_path = "/home/tkdrlf9202/Datasets/liver_year2_dataset_1810"
-prect, ct, mask = load_liver_seg_dataset_year2(data_path, None)
+prect, ct, mask = load_liver_seg_dataset_year2(data_path, None, window_width=400, window_level=50)
 
 
 
