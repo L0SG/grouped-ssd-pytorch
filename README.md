@@ -1,6 +1,6 @@
 # Grouped SSD (GSSD) for liver lesions detection from multi-phase CT 
 
-**Note: the [MICCAI 2018 paper](https://arxiv.org/abs/1807.00436) only covers the multi-phase lesions detection part of this project. The iver segmentation with U-net is currently WIP.**
+**Note: the [MICCAI 2018 paper](https://arxiv.org/abs/1807.00436) only covers the multi-phase lesions detection part of this project. The liver segmentation with U-net is currently WIP.**
 
 Pixel-wise liver segmentation & multi-phase lesions detection from CT image in PyTorch
 
