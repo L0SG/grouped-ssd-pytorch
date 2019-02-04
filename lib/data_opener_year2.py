@@ -29,10 +29,12 @@ def apply_window(img, window_width, window_level):
     :param window_level: window level
     :return:
     """
-    if np.amin(img) == 0:
-        print("WARNING: This CT image has minimum CT HU of 0. Double check if the windowing function is right")
-        print("WARNING: manually adjusting HU to have minimum value of -1024...")
-        img = np.subtract(img, 1024)
+    # if np.amin(img) == 0:
+    #     print("WARNING: This CT image has minimum CT HU of 0. Double check if the windowing function is right")
+    #     print("WARNING: manually adjusting HU to have minimum value of -1024...")
+    #     img = np.subtract(img, 1024)
+    #
+    # img[img > 1200] = 0
 
     upper_grey = window_level + (window_width / 2.)
     lower_grey = window_level - (window_width / 2.)
@@ -149,7 +151,8 @@ def load_liver_seg_dataset_year2(data_path, num_data_to_load, window_width, wind
         # DEBUG ONLY: save dicom & mask images for given directory
         # for checking if the label data has any artifacts
         # save mask data as image
-        mask_image_save_path = '/home/tkdrlf9202/Datasets/liver_mask_image_year2_1810'
+        mask_image_save_path = '/home/tkdrlf9202/Datasets/liver_mask_image_year2_1810_ww{}_wl{}'.\
+            format(window_width, window_level)
         if not os.path.exists(os.path.join(mask_image_save_path, str(dir_name))):
             os.makedirs(os.path.join(mask_image_save_path, str(dir_name)))
 
@@ -221,7 +224,7 @@ def load_liver_seg_dataset_year2(data_path, num_data_to_load, window_width, wind
 
 
 data_path = "/home/tkdrlf9202/Datasets/liver_year2_dataset_1810"
-prect, ct, mask = load_liver_seg_dataset_year2(data_path, None, window_width=400, window_level=50)
+prect, ct, mask = load_liver_seg_dataset_year2(data_path, None, window_width=2300, window_level=1750)
 
 
 
