@@ -10,3 +10,4 @@ But structures of the liver segmentation data are nearly identical to 3Dircadb (
 
 Assumes 512x512 slices of dicom CT image and their corresponding binary segmentation masks.
 
+The original SSD implementation is hard-forked from [here](https://github.com/amdegroot/ssd.pytorch).
