@@ -1,4 +1,4 @@
-# Grouped SSD (GSSD) and GSSD++ for liver lesion detection from multi-phase CT
+# Grouped SSD (GSSD) and GSSD++ for focal liver lesion detection from multi-phase CT images
 
 This repository is an official PyTorch implementation of the papers:
 
