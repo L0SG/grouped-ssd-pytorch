@@ -49,6 +49,7 @@ Based on the popular single-stage objection detection model, SSD, it applies a p
 We used the following command that includes hyperparameters used in GSSD and GSSD++.
 
 ```bash
+# The following command trains GSSD, a multi-phase focal lesion detection model used in the MICCAI 2018 paper.
 python train_lesion_multiphase_v2.py \
 --datapath (path_to_dataset) \
 --output (path_to_checkpoint_and_log) \
@@ -68,6 +69,7 @@ python train_lesion_multiphase_v2.py \
 ```
 
 ```bash
+# The following command trains GSSD++, an improved GSSD used in the IEEE TETCI 2021 paper.
 python train_lesion_multiphase_v2.py \
 --datapath (path_to_dataset) \
 --output (path_to_checkpoint_and_log) \
