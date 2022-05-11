@@ -17,7 +17,7 @@ This repository is an official PyTorch implementation of the papers:
 ## Overview
 This project provides an application of high-speed single-stage object detection models (e.g., SSD) to a computer-aided diagnosis (CAD) of focal liver lesions.
 
-The use of single-stage detection model enables real-time plug-in support to the CAD toolkit in an interactive manner. This helps radiologists to focus on the machine-predicted region of interest and can reduce human error to the small and hard-to-see lesions.
+The use of single-stage detection model enables real-time plug-in support to the CAD toolkit in an interactive manner. With the design principles inspired by the real-world clinical practice of CAD performed by radiologists, this project helps radiologists to focus on the machine-predicted region of interest and can reduce human error to the small and hard-to-see lesions.
 
 GSSD and GSSD++ present custom-designed neural submodules (grouped convolutions, 1x1 channel fusion, and an attention-guided multiphase alignment of the unregistered CT images) to maximize performance designed for the medical object detection from the multi-phase CT images.
 
