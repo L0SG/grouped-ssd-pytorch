@@ -22,7 +22,6 @@ The use of single-stage detection model enables real-time plug-in support to the
 GSSD and GSSD++ present custom-designed neural submodules (grouped convolutions, 1x1 channel fusion, and an attention-guided multiphase alignment of the unregistered CT images) to maximize performance designed for the medical object detection from the multi-phase CT images.
 
 
-
 ## Data
 
 This repo uses multi-phase CT dataset collected from a university hospital, which is unfortunately outside of my authority to release it to the public.
@@ -32,6 +31,15 @@ During the custom data preparation, we followed the data structure of the liver 
 The input data of the lesion detection and the corresponding label look like the figures from our [MICCAI 2018 paper](https://arxiv.org/abs/1807.00436).
 ![](./pics/figure1.png)
 ![](./pics/gssdpp6.png)
+
+
+## Model and Training 
+
+`ssd_liverdet/models/ssd_multiphase_custom_group.py`: Implementation of our main model, GSSD++.
+
+Based on the popular single-stage objection detection model, SSD, it applies a phase-wise grouped convolution followed by the 1x1 channel fusion module. The model also predicts spatial offsets of the registration mismatch in feature space, guided by visual cues from the phase-wise self-attention.
+
+`ssd_liverdet/pixel_link/model.py`: Our implementation of the neural submodules applied to PixelLink, an alternative backbone CNN architecture which showed improved lesion detection performance from the previous work.
 
 `ssd_liverdet/train_lesion_multiphase_v2.py`: GSSD or GSSD++ training for liver lesion detection. Assumes 4-phase 512x512 slices of dicom CT image and their corresponding bounding box annotations.
 
