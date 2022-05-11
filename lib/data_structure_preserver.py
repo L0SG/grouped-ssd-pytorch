@@ -12,61 +12,33 @@
 import numpy as np
 import os
 import glob
-
-data_path = '/home/tkdrlf9202/Datasets/liver_year1_dataset_extended_1809/dicom_image'
+data_path = '/media/hdd/tkdrlf9202/Datasets/liver_year1_dataset_extended_1904_preprocessed/dicom_image'
 #ct_path = os.path.join(data_path, 'ct')
 # year1 extended data hack, 181031
 ct_path = data_path
 roi_image_path = os.path.join(data_path, 'roi_image')
-
-# rename CT dataset phases to have consistent name (A, D, P, Pre)
-# fix V -> P, LA -> A
-# traverse over subjects
 subject_name_list = []
-for subject in glob.glob(os.path.join(ct_path, '*')):
-    # append basename of subject to compare with roi_image
-    subject_name_list.append(os.path.basename(os.path.normpath(subject)))
-    for subfolder in glob.glob(os.path.join(subject, '*')):
-        # retrieve basename of the path
-        basename = os.path.basename(os.path.normpath(subfolder))
-        # is the basename is V or LA, fix it
-        if basename == 'V':
-            for image in glob.glob(os.path.join(subfolder, '*')):
-                # get suffix and fix basename (ex: 0012.DCM)
-                suffix = image[-8:]
-                basename_fixed = 'P_' + suffix
-                # make path for renaming
-                image_fixed = os.path.join(subfolder, basename_fixed)
-                # rename image
-                os.rename(image, image_fixed)
-            # rename folder
-            os.rename(subfolder, os.path.join(subject, 'P'))
 
-        elif basename == 'LA':
-            for image in glob.glob(os.path.join(subfolder, '*')):
-                # get suffix and fix basename (ex: 0012.DCM)
-                suffix = image[-8:]
-                basename_fixed = 'A_' + suffix
-                # make path for renaming
-                image_fixed = os.path.join(subfolder, basename_fixed)
-                # rename image
-                os.rename(image, image_fixed)
-            # rename folder
-            os.rename(subfolder, os.path.join(subject, 'A'))
-# sort the name list to compare with roi_image folders
-subject_name_list.sort()
 
-###################### end the script for just fixing folder names, 1801031
-print("folder name fixing ended")
+def fix_folder_integrity():
+    # rename CT dataset phases to have consistent name (A, D, P, Pre)
+    # fix V -> P, LA -> A
+    # traverse over subjects
+    for subject in glob.glob(os.path.join(ct_path, '*')):
+        # append basename of subject to compare with roi_image
+        subject_name_list.append(os.path.basename(os.path.normpath(subject)))
 
-subject_name_list_roi = []
-# check roi_image data integrity
-for subject in glob.glob(os.path.join(roi_image_path, '*')):
-    subject_name_list_roi.append(os.path.basename(os.path.normpath(subject)))
-    for subfolder in glob.glob(os.path.join(subject, '*')):
-        basename = os.path.basename(os.path.normpath(subfolder))
-        if basename not in ['A', 'D', 'P', 'Pre']:
-            print('error: phase name ' + str(basename) + ' not in list [A, D, P, Pre], fixing...')
+        # 1904 data has unusual cases were both "P" and "V" folders exists: breaks the assumption
+        subfolders = [f.path for f in os.scandir(subject) if f.is_dir()]
+        subfolders_basename = [os.path.basename(subfolder) for subfolder in subfolders]
+        if 'V' in subfolders_basename and 'P' in subfolders_basename:
+            print("ERROR: {} has both 'P' and 'V' subfolders. skipping without fixing...".format(os.path.basename(subject)))
+            continue
+
+        for subfolder in glob.glob(os.path.join(subject, '*')):
+            # retrieve basename of the path
+            basename = os.path.basename(os.path.normpath(subfolder))
+            # is the basename is V or LA, fix it
             if basename == 'V':
                 for image in glob.glob(os.path.join(subfolder, '*')):
                     # get suffix and fix basename (ex: 0012.DCM)
@@ -90,9 +62,51 @@ for subject in glob.glob(os.path.join(roi_image_path, '*')):
                     os.rename(image, image_fixed)
                 # rename folder
                 os.rename(subfolder, os.path.join(subject, 'A'))
+    # sort the name list to compare with roi_image folders
+    subject_name_list.sort()
 
-subject_name_list_roi.sort()
-if subject_name_list != subject_name_list_roi:
-    print('error: subject name between ct and roi_image does not match')
-    difference = set(subject_name_list).symmetric_difference(set(subject_name_list_roi))
-    print('mismatching subjects: ' + str(difference))
+    ###################### end the script for just fixing folder names, 1801031
+    print("folder name fixing ended")
+
+
+def fix_roi_integrity():
+    subject_name_list_roi = []
+    # check roi_image data integrity
+    for subject in glob.glob(os.path.join(roi_image_path, '*')):
+        subject_name_list_roi.append(os.path.basename(os.path.normpath(subject)))
+        for subfolder in glob.glob(os.path.join(subject, '*')):
+            basename = os.path.basename(os.path.normpath(subfolder))
+            if basename not in ['A', 'D', 'P', 'Pre']:
+                print('error: phase name ' + str(basename) + ' not in list [A, D, P, Pre], fixing...')
+                if basename == 'V':
+                    for image in glob.glob(os.path.join(subfolder, '*')):
+                        # get suffix and fix basename (ex: 0012.DCM)
+                        suffix = image[-8:]
+                        basename_fixed = 'P_' + suffix
+                        # make path for renaming
+                        image_fixed = os.path.join(subfolder, basename_fixed)
+                        # rename image
+                        os.rename(image, image_fixed)
+                    # rename folder
+                    os.rename(subfolder, os.path.join(subject, 'P'))
+
+                elif basename == 'LA':
+                    for image in glob.glob(os.path.join(subfolder, '*')):
+                        # get suffix and fix basename (ex: 0012.DCM)
+                        suffix = image[-8:]
+                        basename_fixed = 'A_' + suffix
+                        # make path for renaming
+                        image_fixed = os.path.join(subfolder, basename_fixed)
+                        # rename image
+                        os.rename(image, image_fixed)
+                    # rename folder
+                    os.rename(subfolder, os.path.join(subject, 'A'))
+
+    subject_name_list_roi.sort()
+    if subject_name_list != subject_name_list_roi:
+        print('error: subject name between ct and roi_image does not match')
+        difference = set(subject_name_list).symmetric_difference(set(subject_name_list_roi))
+        print('mismatching subjects: ' + str(difference))
+
+
+fix_folder_integrity()

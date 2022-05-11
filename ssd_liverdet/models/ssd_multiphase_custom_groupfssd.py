@@ -6,8 +6,10 @@ from layers import *
 from data import v2
 import os
 
-GROUPS_VGG = 1
-GROUPS_EXTRA = 1
+# GROUPS_VGG = 4
+# GROUPS_EXTRA = 4
+# use_fuseconv = True
+# feature_scale = 1
 
 def xavier(param):
     nn.init.xavier_uniform(param)
@@ -60,43 +62,110 @@ class SSD(nn.Module):
             self.detect = Detect(num_classes, 0, 200, 0.01, 0.45)
 
         # FSSD extra layers before fusion
-        self.conv81 = nn.Conv2d(1024, 256, kernel_size=1)
+        self.conv81 = nn.Conv2d(1024, 256, kernel_size=1, groups=GROUPS_EXTRA)
         self.conv81.apply(weights_init)
         self.bn_conv81 = nn.BatchNorm2d(256)
-        self.conv82 = nn.Conv2d(256, 512, kernel_size=3, stride=2, padding=1)
+        self.conv82 = nn.Conv2d(256, 512, kernel_size=3, stride=2, padding=1, groups=GROUPS_EXTRA)
         self.conv82.apply(weights_init)
         self.bn_conv82 = nn.BatchNorm2d(512)
         self.bn_fused = nn.BatchNorm2d(768)
         # FSSD extra layers after fusion
-        self.conv91 = nn.Conv2d(768, 512, kernel_size=3, stride=1, padding=1)
+        self.conv91 = nn.Conv2d(768, 512, kernel_size=3, stride=1, padding=1, groups=GROUPS_EXTRA)
         self.conv91.apply(weights_init)
         self.bn_conv91 = nn.BatchNorm2d(512)
-        self.conv101 = nn.Conv2d(512, 512, kernel_size=3, stride=2, padding=1)
+        self.conv101 = nn.Conv2d(512, 512, kernel_size=3, stride=2, padding=1, groups=GROUPS_EXTRA)
         self.conv101.apply(weights_init)
         self.bn_conv101 = nn.BatchNorm2d(512)
-        self.conv111 = nn.Conv2d(512, 256, kernel_size=3, stride=2, padding=1)
+        self.conv111 = nn.Conv2d(512, 256, kernel_size=3, stride=2, padding=1, groups=GROUPS_EXTRA)
         self.conv111.apply(weights_init)
         self.bn_conv111 = nn.BatchNorm2d(256)
-        self.conv121 = nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1)
+        self.conv121 = nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1, groups=GROUPS_EXTRA)
         self.conv121.apply(weights_init)
         self.bn_conv121 = nn.BatchNorm2d(256)
-        self.conv131 = nn.Conv2d(256, 256, kernel_size=3, stride=1)
+        self.conv131 = nn.Conv2d(256, 256, kernel_size=3, stride=1, groups=GROUPS_EXTRA)
         self.conv131.apply(weights_init)
         self.bn_conv131 = nn.BatchNorm2d(256)
-        self.conv141 = nn.Conv2d(256, 256, kernel_size=3, stride=1)
+        self.conv141 = nn.Conv2d(256, 256, kernel_size=3, stride=1, groups=GROUPS_EXTRA)
         self.conv141.apply(weights_init)
         self.bn_conv141 = nn.BatchNorm2d(256)
 
 
         # FSSD fuse layers
-        self.fuse_conv43 = nn.Conv2d(512, 256, kernel_size=1)
+        self.fuse_conv43 = nn.Conv2d(512, 256, kernel_size=1, groups=GROUPS_VGG)
         self.fuse_conv43.apply(weights_init)
-        self.fuse_fc7 = nn.Conv2d(1024, 256, kernel_size=1)
+        self.fuse_fc7 = nn.Conv2d(1024, 256, kernel_size=1, groups=GROUPS_VGG)
         self.fuse_fc7.apply(weights_init)
         self.fuse_fc7_bilinear = nn.UpsamplingBilinear2d(size=(38, 38))
-        self.fuse_conv82 = nn.Conv2d(512, 256, kernel_size=1)
+        self.fuse_conv82 = nn.Conv2d(512, 256, kernel_size=1, groups=GROUPS_EXTRA)
         self.fuse_conv82.apply(weights_init)
         self.fuse_conv82_bilienar = nn.UpsamplingBilinear2d(size=(38, 38))
+
+        # groupfuse layers
+        if use_fuseconv is True:
+            # fuse conv layers for mixing grouped feature map
+            # it adds 2 extra 1x1 conv just before attaching to the sources
+
+            self.fuse_11 = nn.Conv2d(512*feature_scale, 512*feature_scale, kernel_size=1)
+            self.fuse_11.apply(weights_init)
+            if batch_norm:
+                self.bn_fuse_11 = nn.BatchNorm2d(512*feature_scale)
+            # self.fuse_12 = nn.Conv2d(512*feature_scale, 512*feature_scale, kernel_size=1)
+            # self.fuse_12.apply(weights_init)
+            # if batch_norm:
+            #     self.bn_fuse_12 = nn.BatchNorm2d(512*feature_scale)
+
+            self.fuse_21 = nn.Conv2d(512*feature_scale, 512*feature_scale, kernel_size=1)
+            self.fuse_21.apply(weights_init)
+            if batch_norm:
+                self.bn_fuse_21 = nn.BatchNorm2d(512*feature_scale)
+            # self.fuse_22 = nn.Conv2d(1024*feature_scale, 1024*feature_scale, kernel_size=1)
+            # self.fuse_22.apply(weights_init)
+            # if batch_norm:
+            #     self.bn_fuse_22 = nn.BatchNorm2d(1024*feature_scale)
+
+            self.fuse_31 = nn.Conv2d(256*feature_scale, 256*feature_scale, kernel_size=1)
+            self.fuse_31.apply(weights_init)
+            if batch_norm:
+                self.bn_fuse_31 = nn.BatchNorm2d(256*feature_scale)
+            # self.fuse_32 = nn.Conv2d(512*feature_scale, 512*feature_scale, kernel_size=1)
+            # self.fuse_32.apply(weights_init)
+            # if batch_norm:
+            #     self.bn_fuse_32 = nn.BatchNorm2d(512*feature_scale)
+
+            self.fuse_41 = nn.Conv2d(256*feature_scale, 256*feature_scale, kernel_size=1)
+            self.fuse_41.apply(weights_init)
+            if batch_norm:
+                self.bn_fuse_41 = nn.BatchNorm2d(256*feature_scale)
+            # self.fuse_42 = nn.Conv2d(256*feature_scale, 256*feature_scale, kernel_size=1)
+            # self.fuse_42.apply(weights_init)
+            # if batch_norm:
+            #     self.bn_fuse_42 = nn.BatchNorm2d(256*feature_scale)
+
+            self.fuse_51 = nn.Conv2d(256*feature_scale, 256*feature_scale, kernel_size=1)
+            self.fuse_51.apply(weights_init)
+            if batch_norm:
+                self.bn_fuse_51 = nn.BatchNorm2d(256*feature_scale)
+            # self.fuse_52 = nn.Conv2d(256*feature_scale, 256*feature_scale, kernel_size=1)
+            # self.fuse_52.apply(weights_init)
+            # if batch_norm:
+            #     self.bn_fuse_52 = nn.BatchNorm2d(256*feature_scale)
+
+            self.fuse_61 = nn.Conv2d(256*feature_scale, 256*feature_scale, kernel_size=1)
+            self.fuse_61.apply(weights_init)
+            if batch_norm:
+                self.bn_fuse_61 = nn.BatchNorm2d(256*feature_scale)
+            # self.fuse_62 = nn.Conv2d(256*feature_scale, 256*feature_scale, kernel_size=1)
+            # self.fuse_62.apply(weights_init)
+            # if batch_norm:
+            #     self.bn_fuse_62 = nn.BatchNorm2d(256*feature_scale)
+
+            self.fuse_list1 = nn.ModuleList([self.fuse_31, self.fuse_41, self.fuse_51, self.fuse_61])
+            # self.fuse_list2 = nn.ModuleList([self.fuse_32, self.fuse_42, self.fuse_52, self.fuse_62])
+            if batch_norm:
+                self.bn_fuse_list1 = nn.ModuleList([self.bn_fuse_31, self.bn_fuse_41, self.bn_fuse_51, self.bn_fuse_61])
+                # self.bn_fuse_list2 = nn.ModuleList([self.bn_fuse_32, self.bn_fuse_42, self.bn_fuse_52, self.bn_fuse_62])
+
+
 
     def forward(self, x):
         """Applies network layers and ops on input image(s) x.
@@ -197,6 +266,21 @@ class SSD(nn.Module):
             conv141 = self.bn_conv141(conv141)
         conv141 = F.relu(conv141)
 
+        # apply group fusion layer
+        if use_fuseconv:
+            conv91 = self.fuse_11(conv91)
+            conv101 = self.fuse_21(conv101)
+            conv111 = self.fuse_31(conv111)
+            conv121 = self.fuse_41(conv121)
+            conv131 = self.fuse_51(conv131)
+            conv141 = self.fuse_61(conv141)
+            if self.batch_norm:
+                conv91 = self.bn_fuse_11(conv91)
+                conv101 = self.bn_fuse_21(conv101)
+                conv111 = self.bn_fuse_31(conv111)
+                conv121 = self.bn_fuse_41(conv121)
+                conv131 = self.bn_fuse_51(conv131)
+                conv141 = self.bn_fuse_61(conv141)
         sources.append(conv91)
         sources.append(conv101)
         sources.append(conv111)

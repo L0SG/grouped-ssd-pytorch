@@ -4,7 +4,6 @@
 # # for debugging perf hotspot
 # from line_profiler import LineProfiler
 # from utils import augmentations
-
 import os
 import os.path
 import sys
@@ -12,9 +11,8 @@ import torch
 import torch.utils.data as data
 import torchvision.transforms as transforms
 from PIL import Image, ImageDraw, ImageFont
-import cv2
+# import cv2
 import numpy as np
-from scipy.misc import toimage
 
 # if sys.version_info[0] == 2:
 #    import xml.etree.cElementTree as ET
@@ -102,8 +100,9 @@ class FISHdetection(data.Dataset):
             elif len(img.shape) == 4:
                 _, height, width, channels = img.shape
         except:
-            img = cv2.imread('random_image.jpg')
-            height, width, channels = img.shape
+            raise NotImplementedError
+            # img = cv2.imread('random_image.jpg')
+            # height, width, channels = img.shape
 
             # if self.target_transform is not None:
         #    target = self.target_transform(target, width, height)

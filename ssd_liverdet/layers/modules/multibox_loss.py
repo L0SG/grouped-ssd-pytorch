@@ -95,7 +95,9 @@ class MultiBoxLoss(nn.Module):
         #loss_c = batch_conf.gather(1, conf_t.view(-1, 1)) - log_sum_exp(batch_conf)
 
         # Hard Negative Mining
+        pos = pos.view(loss_c.shape)  # >0.4.0 fix
         loss_c[pos] = 0  # filter out pos boxes for now
+        pos = pos.view(num, -1)  # >0.4.0 fix
         loss_c = loss_c.view(num, -1)
         _, loss_idx = loss_c.sort(1, descending=True)
         _, idx_rank = loss_idx.sort(1)

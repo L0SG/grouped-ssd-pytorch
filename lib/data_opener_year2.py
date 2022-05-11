@@ -170,7 +170,6 @@ def load_liver_seg_dataset_year2(data_path, num_data_to_load, window_width, wind
             cat_slice_save_path = os.path.join(mask_image_save_path, str(dir_name), str(idx) + '.jpg')
             cat_slice = np.zeros([512 * 2, 512 * 5])
 
-
             try:
                 dicom_slice_before = np.copy(dicom_image_before[:, :, :, idx])
                 dicom_slice_after = np.copy(dicom_image_after[:, :, :, idx])
@@ -243,7 +242,8 @@ def load_liver_seg_dataset_year2(data_path, num_data_to_load, window_width, wind
     return list_prect, list_ct, list_mask
 
 
-data_path = "/home/tkdrlf9202/Datasets/liver_year2_dataset_1810"
-prect, ct, mask = load_liver_seg_dataset_year2(data_path, None, window_width=400, window_level=50)
+if __name__ == "__main__":
+    data_path = "/home/tkdrlf9202/Datasets/liver_year2_dataset_1810"
+    prect, ct, mask = load_liver_seg_dataset_year2(data_path, None, window_width=400, window_level=50)
 
-print("done")
+    print("done")

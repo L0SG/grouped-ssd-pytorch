@@ -8,14 +8,14 @@ import argparse
 from torch.autograd import Variable
 import torch.utils.data as data
 #from data import v2, v1, AnnotationTransform, VOCDetection, detection_collate, VOCroot, VOC_CLASSES
-from data import FISHdetection, detection_collate, v2, v1, BaseTransform
+from data import FISHdetection, detection_collate, BaseTransform
 from utils.augmentations import SSDAugmentation
 from layers.modules import MultiBoxLoss
-from ssd_multiphase_custom_512_group import build_ssd
+from models.ssd_multiphase_custom_512_group import build_ssd
 import numpy as np
 import time
 import h5py
-from sklearn.model_selection import train_test_split, KFold
+from sklearn.model_selection import KFold
 import copy
 from test_ap import test_net
 
@@ -330,7 +330,6 @@ def train():
             if False:
                 import matplotlib.pyplot as plt
                 import matplotlib.patches as patches
-                from PIL import Image
                 print('Debug mode: printing augmented data...')
                 images_print = images.data[:, :, :, :].cpu().numpy()
                 images_print[images_print < 0] = 0

@@ -1,39 +1,16 @@
 from __future__ import print_function
-import sys
 import os
 import argparse
 import torch
-import torch.nn as nn
 import torch.backends.cudnn as cudnn
-import torchvision.transforms as transforms
 from torch.autograd import Variable
 #from data import VOCroot, VOC_CLASSES as labelmap
-from PIL import Image
 # from data import AnnotationTransform, VOCDetection, BaseTransform, VOC_CLASSES
 from data import FISHdetection, BaseTransform
-from utils.augmentations import SSDAugmentation
-import torch.utils.data as data
-from ssd_multiphase_custom import build_ssd
+from models.ssd_multiphase_custom import build_ssd
 import numpy as np
 import h5py
-from layers.box_utils import nms
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-from PIL import Image
-from sklearn.model_selection import train_test_split, KFold
-from collections import defaultdict, namedtuple
-import pickle
-
-parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
-parser.add_argument('--trained_model', default='weights/ssd300_allgroup_v2custom_BN_CV0_9000.pth',
-                    type=str, help='Trained state_dict file path to open')
-parser.add_argument('--conf_threshold', default=0.01, type=float,
-                    help='Final confidence threshold')
-parser.add_argument('--cuda', default=True, type=bool,
-                    help='Use cuda to train model')
-#parser.add_argument('--voc_root', default=VOCroot, help='Location of VOC root directory')
-
-args = parser.parse_args()
+from sklearn.model_selection import KFold
 
 
 def voc_ap(rec, prec, use_07_metric=True):
@@ -71,7 +48,7 @@ def voc_ap(rec, prec, use_07_metric=True):
 
 
 def test_net(net, cuda, testset, transform,
-             imsize=300, thresh=0.05):
+             imsize=300, thresh=0.05, mode='v1', use_07_metric=True):
     num_images = len(testset)
 
     # define ground truth and prediciton list
@@ -91,10 +68,11 @@ def test_net(net, cuda, testset, transform,
         # base transform the image and permute to [phase, channel, h, w] and flatten to [1, channel, h, w]
         x = torch.from_numpy(transform(img)[0]).permute(0, 3, 1, 2).contiguous()
         x = x.view(-1, x.shape[2], x.shape[3])
-        x = Variable(x, volatile=True).unsqueeze(0)
+        x = Variable(x).unsqueeze(0)
         if cuda:
             x = x.cuda()
-        y = net(x)      # forward pass
+        with torch.no_grad():
+            y = net(x)      # forward pass
         detections = y.data
         # scale each detection back up to the image
         scale = torch.Tensor([img.shape[2], img.shape[1],
@@ -124,15 +102,24 @@ def test_net(net, cuda, testset, transform,
         # cut out the label (last elem) since it's not necessary for AP
         predictions.extend(boxes)
 
-        # only use the portal phase bbox
-        bbox = np.expand_dims(annotation[0][2, :-1], 0)
-        det = [False]
-        npos += 1
+        if mode == 'v1':
+            # miccai2018 data processing: since then there was 4-phase boxes per data
+            # only use the portal phase bbox
+            bbox = np.expand_dims(annotation[0][2, :-1], 0)
+            det = [False]
+            npos += 1
+            # bbox = annotation[0][:, :-1]
+            # det = [False] * bbox.shape[0]
+            # npos += bbox.shape[0]
+        elif mode == 'v2':
+            # 1904 data processing: now we have single bbox representing for all phases
+            # AND, we do have multiple lesions per data
+            bbox = annotation[0][:, :-1]
+            det = [False] * bbox.shape[0]
+            npos += bbox.shape[0]
+
         class_recs[idx] = {'bbox': bbox,
-                            'det': det}
-        # bbox = annotation[0][:, :-1]
-        # det = [False] * bbox.shape[0]
-        # npos += bbox.shape[0]
+                           'det': det}
 
     # sort the prediction in descending global confidence
     # first parse predictions into img ids, confidence and bb
@@ -143,7 +130,11 @@ def test_net(net, cuda, testset, transform,
     # sort by confidence
     sorted_ind = np.argsort(-confidence)
     sorted_scores = np.sort(-confidence)
-    BB = BB[sorted_ind, :]
+    try:
+        BB = BB[sorted_ind, :]
+    except IndexError:
+        print("WARNING: zero bbox found during AP calculation returning 0...")
+        return 0
     image_ids = [int(image_ids[x]) for x in sorted_ind]
 
     # go down dets and mark TPs and FPs
@@ -188,7 +179,7 @@ def test_net(net, cuda, testset, transform,
     # avoid divide by zero in case the first detection matches a difficult
     # ground truth
     prec = tp / np.maximum(tp + fp, np.finfo(np.float64).eps)
-    ap = voc_ap(rec, prec, use_07_metric=True)
+    ap = voc_ap(rec, prec, use_07_metric=use_07_metric)
 
     print(ap)
     return ap
@@ -287,3 +278,16 @@ if __name__ == '__main__':
     test_net(net, args.cuda, validset,
              BaseTransform(size, means), size,
              thresh=args.conf_threshold)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
+    parser.add_argument('--trained_model', default='weights/ssd300_allgroup_v2custom_BN_CV0_9000.pth',
+                        type=str, help='Trained state_dict file path to open')
+    parser.add_argument('--conf_threshold', default=0.01, type=float,
+                        help='Final confidence threshold')
+    parser.add_argument('--cuda', default=True, type=bool,
+                        help='Use cuda to train model')
+    # parser.add_argument('--voc_root', default=VOCroot, help='Location of VOC root directory')
+
+    args = parser.parse_args()

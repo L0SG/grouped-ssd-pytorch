@@ -11,7 +11,7 @@ import torch.utils.data as data
 from data import FISHdetection, detection_collate, v2, v1
 from utils.augmentations import SSDAugmentation
 from layers.modules import MultiBoxLoss
-from ssd import build_ssd
+from models.ssd import build_ssd
 import numpy as np
 import time
 import h5py

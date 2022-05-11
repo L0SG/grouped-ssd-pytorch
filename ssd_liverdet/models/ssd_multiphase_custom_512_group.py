@@ -3,11 +3,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 from layers import *
-from data import v2
+from data import v2_512
 import os
 
-GROUPS_VGG = 1
-GROUPS_EXTRA = 1
+# GROUPS_VGG = 4
+# GROUPS_EXTRA = 4
+# feature_scale = 1
+# use_fuseconv = True
 
 def xavier(param):
     nn.init.xavier_uniform(param)
@@ -41,15 +43,15 @@ class SSD(nn.Module):
         self.num_classes = num_classes
         self.batch_norm = batch_norm
         # TODO: implement __call__ in PriorBox
-        self.priorbox = PriorBox(v2)
+        self.priorbox = PriorBox(v2_512)
         self.priors = Variable(self.priorbox.forward(), volatile=True)
-        self.size = 300
+        self.size = 512
 
         # SSD network
         self.vgg = nn.ModuleList(base)
 
         # Layer learns to scale the l2 normalized features from conv4_3
-        self.L2Norm = L2Norm(512, 20)
+        self.L2Norm = L2Norm(512*feature_scale, 20)
         self.extras = nn.ModuleList(extras)
 
         self.loc = nn.ModuleList(head[0])
@@ -59,29 +61,75 @@ class SSD(nn.Module):
             self.softmax = nn.Softmax(dim=-1)
             self.detect = Detect(num_classes, 0, 200, 0.01, 0.45)
 
-        # feature fuse layers
-        # fuse conv4_3 and conv5_3 feature map for improved small object detection
-        # layer for deconv of conv5_3 to match dim of conv4_3
-        self.fuse_deconv_53 = nn.ConvTranspose2d(512, 512,
-                                                 kernel_size=2, stride=2)
-        self.fuse_deconv_53.apply(weights_init)
-        if batch_norm:
-            self.bn_fuse_deconv_53 = nn.BatchNorm2d(512)
-        # init the deconv layer with bilinear upsampling
-        # TODO: how?
+        if use_fuseconv is True:
+            # fuse conv layers for mixing grouped feature map
+            # it adds 2 extra 1x1 conv just before attaching to the sources
 
-        self.fuse_conv_53 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
-        self.fuse_conv_53.apply(weights_init)
-        if batch_norm:
-            self.bn_fuse_conv_53 = nn.BatchNorm2d(512)
-        # L2 norm for fuse_conv_53
-        self.L2Norm_53 = L2Norm(512, 10)
+            self.fuse_11 = nn.Conv2d(512*feature_scale, 512*feature_scale, kernel_size=1)
+            self.fuse_11.apply(weights_init)
+            if batch_norm:
+                self.bn_fuse_11 = nn.BatchNorm2d(512*feature_scale)
+            # self.fuse_12 = nn.Conv2d(512*feature_scale, 512*feature_scale, kernel_size=1)
+            # self.fuse_12.apply(weights_init)
+            # if batch_norm:
+            #     self.bn_fuse_12 = nn.BatchNorm2d(512*feature_scale)
 
-        # extra conv for conf4_3 for efficient fusing of fuse_conv5_3
-        self.fuse_conv_43 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
-        self.fuse_conv_43.apply(weights_init)
-        if batch_norm:
-            self.bn_fuse_conv_43 = nn.BatchNorm2d(512)
+            self.fuse_21 = nn.Conv2d(1024*feature_scale, 1024*feature_scale, kernel_size=1)
+            self.fuse_21.apply(weights_init)
+            if batch_norm:
+                self.bn_fuse_21 = nn.BatchNorm2d(1024*feature_scale)
+            # self.fuse_22 = nn.Conv2d(1024*feature_scale, 1024*feature_scale, kernel_size=1)
+            # self.fuse_22.apply(weights_init)
+            # if batch_norm:
+            #     self.bn_fuse_22 = nn.BatchNorm2d(1024*feature_scale)
+
+            self.fuse_31 = nn.Conv2d(512*feature_scale, 512*feature_scale, kernel_size=1)
+            self.fuse_31.apply(weights_init)
+            if batch_norm:
+                self.bn_fuse_31 = nn.BatchNorm2d(512*feature_scale)
+            # self.fuse_32 = nn.Conv2d(512*feature_scale, 512*feature_scale, kernel_size=1)
+            # self.fuse_32.apply(weights_init)
+            # if batch_norm:
+            #     self.bn_fuse_32 = nn.BatchNorm2d(512*feature_scale)
+
+            self.fuse_41 = nn.Conv2d(256*feature_scale, 256*feature_scale, kernel_size=1)
+            self.fuse_41.apply(weights_init)
+            if batch_norm:
+                self.bn_fuse_41 = nn.BatchNorm2d(256*feature_scale)
+            # self.fuse_42 = nn.Conv2d(256*feature_scale, 256*feature_scale, kernel_size=1)
+            # self.fuse_42.apply(weights_init)
+            # if batch_norm:
+            #     self.bn_fuse_42 = nn.BatchNorm2d(256*feature_scale)
+
+            self.fuse_51 = nn.Conv2d(256*feature_scale, 256*feature_scale, kernel_size=1)
+            self.fuse_51.apply(weights_init)
+            if batch_norm:
+                self.bn_fuse_51 = nn.BatchNorm2d(256*feature_scale)
+            # self.fuse_52 = nn.Conv2d(256*feature_scale, 256*feature_scale, kernel_size=1)
+            # self.fuse_52.apply(weights_init)
+            # if batch_norm:
+            #     self.bn_fuse_52 = nn.BatchNorm2d(256*feature_scale)
+
+            self.fuse_61 = nn.Conv2d(256*feature_scale, 256*feature_scale, kernel_size=1)
+            self.fuse_61.apply(weights_init)
+            if batch_norm:
+                self.bn_fuse_61 = nn.BatchNorm2d(256*feature_scale)
+            # self.fuse_62 = nn.Conv2d(256*feature_scale, 256*feature_scale, kernel_size=1)
+            # self.fuse_62.apply(weights_init)
+            # if batch_norm:
+            #     self.bn_fuse_62 = nn.BatchNorm2d(256*feature_scale)
+            self.fuse_71 = nn.Conv2d(256 * feature_scale, 256 * feature_scale, kernel_size=1)
+            self.fuse_71.apply(weights_init)
+            if batch_norm:
+                self.bn_fuse_71 = nn.BatchNorm2d(256 * feature_scale)
+
+            self.fuse_list1 = nn.ModuleList([self.fuse_31, self.fuse_41, self.fuse_51, self.fuse_61, self.fuse_71])
+            # self.fuse_list2 = nn.ModuleList([self.fuse_32, self.fuse_42, self.fuse_52, self.fuse_62])
+            if batch_norm:
+                self.bn_fuse_list1 = nn.ModuleList([self.bn_fuse_31, self.bn_fuse_41, self.bn_fuse_51, self.bn_fuse_61, self.bn_fuse_71])
+                # self.bn_fuse_list2 = nn.ModuleList([self.bn_fuse_32, self.bn_fuse_42, self.bn_fuse_52, self.bn_fuse_62])
+
+
 
 
     def forward(self, x):
@@ -115,64 +163,58 @@ class SSD(nn.Module):
             idx_until_conv4_3 = 33
         for k in range(idx_until_conv4_3):
             x = self.vgg[k](x)
-        x_conv43 = x
-
-        # apply vgg up to conv4_3 relu
-        if self.batch_norm is False:
-            idx_until_conv5_3 = 30
-        elif self.batch_norm is True:
-            idx_until_conv5_3 = 43
-        for k in range(idx_until_conv4_3, idx_until_conv5_3 - 1):
-            x = self.vgg[k](x)
-        x_conv53 = self.vgg[idx_until_conv5_3](x)
-
-        # now x_conv43 is conv_43 and x_conv53 is conv_53
-
-        # apply extra fusion conv at conv4_3
-        fuse_conv43 = self.fuse_conv_43(x_conv43)
-        if self.batch_norm:
-            fuse_conv43 = self.bn_fuse_conv_43(fuse_conv43)
-
-        # apply deconv & extra fusion conv at conv5_3
-        fuse_deconv53 = self.fuse_deconv_53(x_conv53)
-        if self.batch_norm:
-            fuse_deconv53 = self.bn_fuse_deconv_53(fuse_deconv53)
-        fuse_conv53 = self.fuse_conv_53(fuse_deconv53)
-        if self.batch_norm:
-            fuse_conv53 = self.bn_fuse_deconv_53(fuse_conv53)
-
-        # apply L2norm at each fused convs
-        l2_fuse_conv43 = self.L2Norm(fuse_conv43)
-        l2_fuse_conv53 = self.L2Norm_53(fuse_conv53)
-
-        # apply sum and final relu to create source
-        s = F.relu(l2_fuse_conv43 + l2_fuse_conv53, inplace=True)
-
-        # TODO: append lower level features
+        # TODO: l2normed x or just x?
+        s = self.L2Norm(x)
+        #s = x
+        if use_fuseconv:
+            if self.batch_norm:
+                s = F.relu(self.bn_fuse_11(self.fuse_11(s)), inplace=True)
+                # s = F.relu(self.bn_fuse_12(self.fuse_12(s)), inplace=True)
+            else:
+                s = F.relu(self.fuse_11(s), inplace=True)
+                # s = F.relu(self.fuse_12(s), inplace=True)
         sources.append(s)
 
-        # fuse done, keep forward back from conv5_3
-        x = x_conv53
-
         # apply vgg up to fc7
-        for k in range(idx_until_conv5_3, len(self.vgg)):
+        for k in range(idx_until_conv4_3, len(self.vgg)):
             x = self.vgg[k](x)
-        sources.append(x)
+        s2 = x
+        if use_fuseconv:
+            if self.batch_norm:
+                s2 = F.relu(self.bn_fuse_21(self.fuse_21(s2)), inplace=True)
+                # s2 = F.relu(self.bn_fuse_22(self.fuse_22(s2)), inplace=True)
+            else:
+                s2 = F.relu(self.fuse_21(s2), inplace=True)
+                # s2 = F.relu(self.fuse_22(s2), inplace=True)
+
+        sources.append(s2)
 
         # apply extra layers and cache source layer outputs
         # hard-coded for BN case
         if self.batch_norm is False:
+            fuse_counter = 0
             for k, v in enumerate(self.extras):
                 x = F.relu(v(x), inplace=True)
                 if k % 2 == 1:
-                    sources.append(x)
+                    s_extra = x
+                    if use_fuseconv:
+                        s_extra = F.relu(self.fuse_list1[fuse_counter](s_extra), inplace=True)
+                        # s_extra = F.relu(self.fuse_list2[fuse_counter](s_extra), inplace=True)
+                        fuse_counter += 1
+                    sources.append(s_extra)
         elif self.batch_norm is True:
+            fuse_counter = 0
             for k, v in enumerate(self.extras):
                 x = v(x)
                 if k % 2 == 1:
                     x = F.relu(x, inplace=True)
                 if k % 4 == 3:
-                    sources.append(x)
+                    s_extra = x
+                    if use_fuseconv:
+                        s_extra = F.relu(self.bn_fuse_list1[fuse_counter](self.fuse_list1[fuse_counter](s_extra)), inplace=True)
+                        # s_extra = F.relu(self.bn_fuse_list2[fuse_counter](self.fuse_list2[fuse_counter](s_extra)), inplace=True)
+                        fuse_counter += 1
+                    sources.append(s_extra)
 
         # apply multibox head to source layers
         for (x, l, c) in zip(sources, self.loc, self.conf):
@@ -219,26 +261,26 @@ def vgg(cfg, i, batch_norm=False):
             layers += [nn.MaxPool2d(kernel_size=2, stride=2, ceil_mode=True)]
         else:
             # depthwise separable conv: add groups=4 (4 phases)
-            conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1, groups=GROUPS_VGG)
+            conv2d = nn.Conv2d(in_channels, v * feature_scale, kernel_size=3, padding=1, groups=GROUPS_VGG)
             if batch_norm:
-                layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
+                layers += [conv2d, nn.BatchNorm2d(v * feature_scale), nn.ReLU(inplace=True)]
             else:
                 layers += [conv2d, nn.ReLU(inplace=True)]
-            in_channels = v
+            in_channels = v * feature_scale
     pool5 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
-    conv6 = nn.Conv2d(512, 1024, kernel_size=3, padding=6, dilation=6, groups=GROUPS_VGG)
-    conv7 = nn.Conv2d(1024, 1024, kernel_size=1, groups=GROUPS_VGG)
+    conv6 = nn.Conv2d(512*feature_scale, 1024*feature_scale, kernel_size=3, padding=6, dilation=6, groups=GROUPS_VGG)
+    conv7 = nn.Conv2d(1024*feature_scale, 1024*feature_scale, kernel_size=1, groups=GROUPS_VGG)
     if batch_norm:
         layers += [pool5,
-                   conv6, nn.BatchNorm2d(1024), nn.ReLU(inplace=True),
-                   conv7, nn.BatchNorm2d(1024), nn.ReLU(inplace=True)]
+                   conv6, nn.BatchNorm2d(1024*feature_scale), nn.ReLU(inplace=True),
+                   conv7, nn.BatchNorm2d(1024*feature_scale), nn.ReLU(inplace=True)]
     else:
         layers += [pool5, conv6,
                    nn.ReLU(inplace=True), conv7, nn.ReLU(inplace=True)]
     return layers
 
 
-def add_extras(cfg, i, batch_norm=False):
+def add_extras(cfg, size, i, batch_norm=False):
     # Extra layers added to VGG for feature scaling
     layers = []
     in_channels = i
@@ -247,21 +289,31 @@ def add_extras(cfg, i, batch_norm=False):
         if in_channels != 'S':
             if v == 'S':
                 if batch_norm is False:
-                    layers += [nn.Conv2d(in_channels, cfg[k + 1],
+                    layers += [nn.Conv2d(in_channels, (cfg[k + 1]) * feature_scale,
                            kernel_size=(1, 3)[flag], stride=2, padding=1, groups=GROUPS_EXTRA)]
                 else:
-                    layers += [nn.Conv2d(in_channels, cfg[k + 1],
+                    layers += [nn.Conv2d(in_channels, (cfg[k + 1]) * feature_scale,
                                          kernel_size=(1, 3)[flag], stride=2, padding=1, groups=GROUPS_EXTRA),
-                               nn.BatchNorm2d(cfg[k + 1])]
+                               nn.BatchNorm2d((cfg[k + 1]) * feature_scale)]
 
             else:
                 if batch_norm is False:
-                    layers += [nn.Conv2d(in_channels, v, kernel_size=(1, 3)[flag], groups=GROUPS_EXTRA)]
+                    layers += [nn.Conv2d(in_channels, v * feature_scale, kernel_size=(1, 3)[flag], groups=GROUPS_EXTRA)]
                 else:
-                    layers += [nn.Conv2d(in_channels, v, kernel_size=(1, 3)[flag], groups=GROUPS_EXTRA),
-                               nn.BatchNorm2d(v)]
+                    layers += [nn.Conv2d(in_channels, v * feature_scale, kernel_size=(1, 3)[flag], groups=GROUPS_EXTRA),
+                               nn.BatchNorm2d(v * feature_scale)]
             flag = not flag
-        in_channels = v
+        if v == 'S':
+            in_channels = v
+        else:
+            in_channels = v * feature_scale
+    # SSD512 need add one more Conv layer(Conv12_2)
+    if size == 512:
+        if batch_norm is False:
+            layers += [nn.Conv2d(in_channels, 256, kernel_size=4, padding=1, groups=GROUPS_EXTRA)]
+        else:
+            layers += [nn.Conv2d(in_channels, 256, kernel_size=4, padding=1, groups=GROUPS_EXTRA),
+                        nn.BatchNorm2d(256)]
     return layers
 
 
@@ -297,20 +349,19 @@ def multibox(vgg, extra_layers, cfg, num_classes, batch_norm):
 
 base = {
     '300': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'C', 512, 512, 512, 'M',
-    512, 512, 512],
-    #'300': [128, 128, 'M', 256, 256, 'M', 512, 512, 512, 'C', 1024, 1024, 1024, 'M',
-    #1024, 1024, 1024],
-    '512': [],
+            512, 512, 512],
+    '512': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'C', 512, 512, 512, 'M',
+            512, 512, 512],
 }
 extras = {
     '300': [256, 'S', 512, 128, 'S', 256, 128, 256, 128, 256],
-    '512': [],
+    '512': [256, 'S', 512, 128, 'S', 256, 128, 'S', 256, 128, 'S', 256, 128],
 }
 mbox = {
     #'300': [4, 6, 6, 6, 4, 4],  # number of boxes per feature map location
     # for v2_custom cfg: use 6 for lowest layer
     '300': [4, 6, 6, 6, 4, 4],
-    '512': [],
+    '512': [4, 6, 6, 6, 6, 4, 4],
 }
 
 
@@ -318,11 +369,8 @@ def build_ssd(phase, size=300, num_classes=21, batch_norm=False):
     if phase != "test" and phase != "train":
         print("Error: Phase not recognized")
         return
-    if size != 300:
-        print("Error: Sorry only SSD300 is supported currently!")
-        return
 
     # change the input channel from i=3 to 12
     return SSD(phase, *multibox(vgg(base[str(size)], i=12, batch_norm=batch_norm),
-                                add_extras(extras[str(size)], 1024, batch_norm),
+                                add_extras(extras[str(size)], size, 1024 * feature_scale, batch_norm),
                                 mbox[str(size)], num_classes, batch_norm), num_classes, batch_norm)

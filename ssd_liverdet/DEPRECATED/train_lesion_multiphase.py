@@ -8,14 +8,14 @@ import argparse
 from torch.autograd import Variable
 import torch.utils.data as data
 #from data import v2, v1, AnnotationTransform, VOCDetection, detection_collate, VOCroot, VOC_CLASSES
-from data import FISHdetection, detection_collate, v2, v1, BaseTransform
+from data import FISHdetection, detection_collate, BaseTransform
 from utils.augmentations import SSDAugmentation
 from layers.modules import MultiBoxLoss
-from ssd_multiphase_custom_group import build_ssd
+from models.ssd_multiphase_custom_group import build_ssd
 import numpy as np
 import time
 import h5py
-from sklearn.model_selection import train_test_split, KFold
+from sklearn.model_selection import KFold
 import copy
 from test_ap import test_net
 
@@ -39,7 +39,7 @@ parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
 parser.add_argument('--weight_decay', default=5e-4, type=float, help='Weight decay for SGD')
 parser.add_argument('--gamma', default=0.1, type=float, help='Gamma update for SGD')
 parser.add_argument('--log_iters', default=True, type=bool, help='Print the loss at each iteration')
-parser.add_argument('--visdom', default=True, type=str2bool, help='Use visdom to for loss visualization')
+parser.add_argument('--visdom', default=False, type=str2bool, help='Use visdom to for loss visualization')
 parser.add_argument('--send_images_to_visdom', type=str2bool, default=False, help='Sample a random image from each 10th batch, send it to visdom after augmentations step')
 parser.add_argument('--save_folder', default='weights/', help='Location to save checkpoint models')
 # parser.add_argument('--voc_root', default=VOCroot, help='Location of VOC root directory')
@@ -96,7 +96,8 @@ if args.visdom:
 
 """"########## Data Loading & dimension matching ##########"""
 # load custom CT dataset
-datapath = '/home/tkdrlf9202/Datasets/liver_lesion_aligned/lesion_dataset_4phase_aligned.h5'
+datapath = '/media/hdd/tkdrlf9202/Datasets/liver_lesion_aligned_miccai2018/' \
+           'lesion_dataset_4phase_aligned.h5'
 train_sets = [('liver_lesion')]
 
 
@@ -331,7 +332,6 @@ def train():
             if False:
                 import matplotlib.pyplot as plt
                 import matplotlib.patches as patches
-                from PIL import Image
                 print('Debug mode: printing augmented data...')
                 images_print = images.data[:, :, :, :].cpu().numpy()
                 images_print[images_print < 0] = 0

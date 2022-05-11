@@ -1,26 +1,18 @@
 from __future__ import print_function
-import sys
 import os
 import argparse
 import torch
-import torch.nn as nn
 import torch.backends.cudnn as cudnn
-import torchvision.transforms as transforms
 from torch.autograd import Variable
 #from data import VOCroot, VOC_CLASSES as labelmap
-from PIL import Image
 # from data import AnnotationTransform, VOCDetection, BaseTransform, VOC_CLASSES
 from data import FISHdetection, BaseTransform
-from utils.augmentations import SSDAugmentation
-import torch.utils.data as data
-from ssd_multiphase_custom_group import build_ssd
+from models.ssd_multiphase_custom_group import build_ssd
 import numpy as np
 import h5py
-from layers.box_utils import nms
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from PIL import Image
-from sklearn.model_selection import train_test_split, KFold
+from sklearn.model_selection import KFold
 import time
 
 parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')

@@ -4,8 +4,8 @@ import cv2
 import numpy as np
 import types
 from numpy import random
-from pixel_link.pixellink_data import *
-from PIL import Image
+# this version assumes that image is cuda tensor
+
 
 def intersect(box_a, box_b):
     max_xy = np.minimum(box_a[:, 2:], box_b[2:])
@@ -67,7 +67,8 @@ class Lambda(object):
 
 class ConvertFromInts(object):
     def __call__(self, image, boxes=None, labels=None):
-        return image.astype(np.float32), boxes, labels
+        # return image.astype(np.float32), boxes, labels
+        return image.float(), boxes, labels
 
 
 class SubtractMeans(object):
@@ -75,9 +76,8 @@ class SubtractMeans(object):
         self.mean = np.array(mean, dtype=np.float32)
 
     def __call__(self, image, boxes=None, labels=None):
-        image = image.astype(np.float32)
-        image -= self.mean
-        return image.astype(np.float32), boxes, labels
+        image -= self.mean[0]
+        return image, boxes, labels
 
 
 class ToAbsoluteCoords(object):
@@ -138,47 +138,29 @@ class ToPercentCoords(object):
 class Resize(object):
     def __init__(self, size=300):
         self.size = size
-
-    def _resize_image(image, target):
-        return cv2.resize(image, dsize=(target[0], target[1]))
+        # self.resize_compose = transforms.Compose([transforms.ToPILImage(),
+        #                                           transforms.Resize((self.size, self.size)),
+        #                                           transforms.ToTensor()])
 
     def __call__(self, image, boxes=None, labels=None):
-
         if len(image.shape) == 3:
-            image = cv2.resize(image, (self.size,
-                                     self.size))
+            img_size = (image.shape[0], image.shape[1])
+            if img_size != (self.size, self.size):
+                image = cv2.resize(image, (self.size,
+                                         self.size))
             return image, boxes, labels
 
         elif len(image.shape) == 4:
-            image_resized = np.zeros([image.shape[0], self.size, self.size, image.shape[3]], dtype=image.dtype)
-            for idx in range(image.shape[0]):
-                image_resized[idx] = cv2.resize(image[idx], (self.size, self.size))
-            return image_resized, boxes, labels
-
-
-class ResizeFast(object):
-    def __init__(self, size=300):
-        self.size = size
-
-    def _resize_image(image, target):
-        return cv2.resize(image, dsize=(target[0], target[1]))
-
-    def __call__(self, image, boxes=None, labels=None):
-
-        if len(image.shape) == 3:
-            image = cv2.resize(image, (self.size,
-                                     self.size))
-            return image, boxes, labels
-
-        elif len(image.shape) == 4:
-            image_resized = np.zeros([image.shape[0], self.size, self.size, image.shape[3]], dtype=image.dtype)
-            for idx in range(image.shape[0]):
-                img = (image[idx] * 255).astype(np.uint8)
-                img = Image.fromarray(img).resize((self.size, self.size))
-                img = np.asarray(img).astype(np.float32) / 255.
-                image_resized[idx] = img
-                del img
-            return image_resized, boxes, labels
+            img_size = (image.shape[1], image.shape[2])
+            if img_size != (self.size, self.size):
+                image_resized = image.new_zeros((image.shape[0], self.size, self.size, image.shape[3]))
+                # image_resized = np.zeros([image.shape[0], self.size, self.size, image.shape[3]], dtype=image.dtype)
+                for idx in range(image.shape[0]):
+                    resized = torch.tensor(cv2.resize(image[idx].cpu().numpy(), (self.size, self.size))).cuda()
+                    image_resized[idx] = resized
+                return image_resized, boxes, labels
+            else:
+                return image, boxes, labels
 
 
 class RandomSaturation(object):
@@ -189,7 +171,7 @@ class RandomSaturation(object):
         assert self.lower >= 0, "contrast lower must be non-negative."
 
     def __call__(self, image, boxes=None, labels=None):
-        if random.randint(0, 2):
+        if random.randint(2):
             image[:, :, 1] *= random.uniform(self.lower, self.upper)
 
         return image, boxes, labels
@@ -201,8 +183,9 @@ class RandomHue(object):
         self.delta = delta
 
     def __call__(self, image, boxes=None, labels=None):
-        if random.randint(0, 2):
-            image[:, :, 0] += random.uniform(-self.delta, self.delta)
+        if random.randint(2):
+            #image[:, :, 0] += random.uniform(-self.delta, self.delta)
+            image[:, :, 0] += torch.FloatTensor(1).uniform_(-self.delta, self.delta).cuda()
             image[:, :, 0][image[:, :, 0] > 360.0] -= 360.0
             image[:, :, 0][image[:, :, 0] < 0.0] += 360.0
         return image, boxes, labels
@@ -215,7 +198,7 @@ class RandomLightingNoise(object):
                       (2, 0, 1), (2, 1, 0))
 
     def __call__(self, image, boxes=None, labels=None):
-        if random.randint(0, 2):
+        if random.randint(2):
             swap = self.perms[random.randint(len(self.perms))]
             shuffle = SwapChannels(swap)  # shuffle channels
             image = shuffle(image)
@@ -246,8 +229,9 @@ class RandomContrast(object):
 
     # expects float image
     def __call__(self, image, boxes=None, labels=None):
-        if random.randint(0, 2):
-            alpha = random.uniform(self.lower, self.upper)
+        if random.randint(2):
+            # alpha = random.uniform(self.lower, self.upper)
+            alpha = torch.FloatTensor(1).uniform_(self.lower, self.upper).cuda()
             image *= alpha
         return image, boxes, labels
 
@@ -259,20 +243,45 @@ class RandomBrightness(object):
         self.delta = delta
 
     def __call__(self, image, boxes=None, labels=None):
-        if random.randint(0, 2):
-            delta = random.uniform(-self.delta, self.delta)
+        if random.randint(2):
+            # delta = random.uniform(-self.delta, self.delta)
+            delta = torch.FloatTensor(1).uniform_(-self.delta, self.delta).cuda()
             image += delta
         return image, boxes, labels
 
 
-class ToCV2Image(object):
-    def __call__(self, tensor, boxes=None, labels=None):
-        return tensor.cpu().numpy().astype(np.float32).transpose((1, 2, 0)), boxes, labels
+# class ToCV2Image(object):
+#     def __call__(self, tensor, boxes=None, labels=None):
+#         return tensor.cpu().numpy().astype(np.float32).transpose((1, 2, 0)), boxes, labels
 
+
+# class ToTensor(object):
+#     def __call__(self, cvimage, boxes=None, labels=None):
+#         return torch.from_numpy(cvimage.astype(np.float32)).permute(2, 0, 1), boxes, labels
 
 class ToTensor(object):
-    def __call__(self, cvimage, boxes=None, labels=None):
-        return torch.from_numpy(cvimage.astype(np.float32)).permute(2, 0, 1), boxes, labels
+    def __call__(self, image, boxes=None, labels=None):
+        return torch.tensor(image).cuda(), boxes, labels
+
+class ToNumpy(object):
+    def __call__(self, image, boxes=None, labels=None):
+        return image.cpu().numpy(), boxes, labels
+
+
+class POnly(object):
+    def __call__(self, image, boxes=None, labels=None):
+        # drop other phases other than portal (index 2)
+        image = np.repeat(np.expand_dims(image[2], 0), 4, axis=0)
+        return image, boxes, labels
+
+
+class Normalize(object):
+    def __call__(self, image, boxes=None, labels=None):
+        img_min = image.min()
+        img_max = image.max()
+        assert img_min != img_max, "all-black image detected during Normalizing. check preprocessing"
+        img_norm = (image - img_min) / (img_max - img_min)
+        return img_norm, boxes, labels
 
 
 class RandomSampleCrop(object):
@@ -329,8 +338,8 @@ class RandomSampleCrop(object):
                 if h / w < 0.5 or h / w > 2:
                     continue
 
-                left = random.uniform(0, width - w)
-                top = random.uniform(0, height - h)
+                left = random.uniform(width - w)
+                top = random.uniform(height - h)
 
                 # convert to integer rect x1,y1,x2,y2
                 rect = np.array([int(left), int(top), int(left+w), int(top+h)])
@@ -390,7 +399,7 @@ class Expand(object):
         self.ratio = ratio
 
     def __call__(self, image, boxes, labels):
-        #if random.randint(0, 2):
+        #if random.randint(2):
         #    return image, boxes, labels
 
         # single-phase case: original
@@ -420,12 +429,12 @@ class Expand(object):
             ratio = random.uniform(1, self.ratio)
             left = random.uniform(0, width * ratio - width)
             top = random.uniform(0, height * ratio - height)
-
-            expand_image = np.zeros(
-                (phase, int(height * ratio), int(width * ratio), depth),
-                dtype=image.dtype)
-            expand_image[:, :, :, :] = self.mean
-            expand_image[:, int(top):int(top + height),
+            expand_image = image.new_zeros((phase, int(height * ratio), int(width * ratio), depth))
+            # expand_image = np.zeros(
+            #     (phase, int(height * ratio), int(width * ratio), depth),
+            #     dtype=image.dtype)
+            expand_image.data[:, :, :, :] = self.mean[0]
+            expand_image.data[:, int(top):int(top + height),
                          int(left):int(left + width), :] = image
             image = expand_image
             boxes = boxes.copy()
@@ -437,7 +446,7 @@ class RandomMirror(object):
     def __call__(self, image, boxes, classes):
         if len(image.shape) == 3:
             _, width, _ = image.shape
-            if random.randint(0, 2):
+            if random.randint(2):
                 image = image[:, ::-1]
                 boxes = boxes.copy()
                 boxes[:, 0::2] = width - boxes[:, 2::-2]
@@ -445,8 +454,9 @@ class RandomMirror(object):
 
         elif len(image.shape) == 4:
             _, _, width, _ = image.shape
-            if random.randint(0, 2):
-                image = image[:, :, ::-1]
+            if random.randint(2):
+                image = torch.flip(image, (2,))
+                #image = image[:, :, ::-1]
                 boxes = boxes.copy()
                 boxes[:, 0::2] = width - boxes[:, 2::-2]
             return image, boxes, classes
@@ -495,66 +505,32 @@ class PhotometricDistort(object):
         #self.rand_light_noise = RandomLightingNoise()
 
     def __call__(self, image, boxes, labels):
-        im = image.copy()
-        im, boxes, labels = self.rand_brightness(im, boxes, labels)
+        #im = image.copy()
+        image, boxes, labels = self.rand_brightness(image, boxes, labels)
         # since convertcolor & rs & rh are disabled, both distort are same: rc only
-        if random.randint(0, 2):
+        if random.randint(2):
             distort = Compose(self.pd[:-1])
         else:
             distort = Compose(self.pd[1:])
-        im, boxes, labels = distort(im, boxes, labels)
+        image, boxes, labels = distort(image, boxes, labels)
         # do not use lightning noise: CT channels are z-axis
         # return self.rand_light_noise(im, boxes, labels)
-        return im, boxes, labels
-
-
-class POnly(object):
-    def __call__(self, image, boxes=None, labels=None):
-        # drop other phases other than portal (index 2)
-        image = np.repeat(np.expand_dims(image[2], 0), 4, axis=0)
         return image, boxes, labels
 
 
-class Normalize(object):
-    def __call__(self, image, boxes=None, labels=None):
-        img_min = image.min()
-        img_max = image.max()
-        assert img_min != img_max, "all-black image detected during Normalizing. check preprocessing"
-        img_norm = (image - img_min) / (img_max - img_min)
-        return img_norm, boxes, labels
 
 
-class PreparePixelLinkTargets(object):
-    def __init__(self, size, pixel_link_version="2s"):
-        self.size = size
-        self.pixel_link_version = pixel_link_version
-
-    def __call__(self, image, boxes=None, labels=None):
-        # given SSD targets annotation, generate labels used for pixellink
-        # input: targets list with shape [batch_size]
-        # each element is tensor that has [x_min, y_min, x_max, y_max, label (0.0)]] in percentage coordinate
-        # convert to [x_min, y_min, x_max, y_min, x_max, y_max, x_min, y_max] in int list
-
-        boxes_long = np.array(boxes * self.size, dtype=np.long)
-        boxes_converted = np.take(boxes_long, indices=[0, 1, 2, 1, 2, 3, 0, 3], axis=1)
-        pixel_mask, neg_pixel_mask, pixel_pos_weight, link_mask = label_to_mask_and_pixel_pos_weight(boxes_converted, (self.size, self.size),
-                                                                                                     self.pixel_link_version)
-
-        labels = {'pixel_mask': pixel_mask, 'neg_pixel_mask': neg_pixel_mask, 'labels': labels,
-                           'pixel_pos_weight': pixel_pos_weight, 'link_mask': link_mask}
-
-        return image, boxes, labels
 
 class SSDAugmentation(object):
-    def __init__(self, pixeljitter=0.01, ratio=1.5, size=300, mean=(104, 117, 123), use_normalize=False, p_only=False, use_pixel_link=False, pixel_link_version="2s"):
+    def __init__(self, pixeljitter=0.01, ratio=1.5, size=300, mean=(104, 117, 123), use_normalize=False, p_only=False):
         self.pixeljitter = pixeljitter
         self.mean = mean
         self.size = size
         self.ratio = ratio
         self.use_normalize = use_normalize
         self.p_only = p_only
-        self.use_pixel_link = use_pixel_link
         compose_list = [
+            ToTensor(),
             ConvertFromInts(),
             ToAbsoluteCoords(),
             # new augmentation: pixel jitter
@@ -567,22 +543,14 @@ class SSDAugmentation(object):
             # mirroring is not correct method for CT
             RandomMirror(),
             ToPercentCoords(),
-            SubtractMeans(self.mean)
+            Resize(self.size),
+            SubtractMeans(self.mean),
         ]
         if self.p_only:
             compose_list.append(POnly())
         if self.use_normalize:
             compose_list.append(Normalize())
-
-        # compose_list.append(Resize(self.size))
-
-        assert self.use_normalize, "new ResizeFast implementation assumes --use_normalize to True!"
-        compose_list.append(ResizeFast(self.size))
-
-        if self.use_pixel_link:
-            print("INFO:using augmentation modified for pixellink model!")
-            self.pixel_link_version = pixel_link_version
-            compose_list.append(PreparePixelLinkTargets(self.size, self.pixel_link_version))
+        compose_list.append(ToNumpy())
         self.augment = Compose(compose_list)
 
     def __call__(self, img, boxes, labels):
