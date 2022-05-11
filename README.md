@@ -45,6 +45,28 @@ Based on the popular single-stage objection detection model, SSD, it applies a p
 
 `ssd_liverdet/train_lesion_multiphase_v2_pixellink.py`: PixelLink++ training for liver lesion detection. Assumes 4-phase 512x512 slices of dicom CT image and their corresponding bounding box annotations.
 
+
+We used the following command that includes hyperparameters used in GSSD++.
+```bash
+python train_lesion_multiphase_v2.py \
+--datapath (path_to_dataset) \
+--output (path_to_checkpoint_and_log) \
+--load_data_to_ram False \
+--ssd_type gssd \
+--use_normalize True \
+--use_self_attention True --use_self_attention_base True \
+--groups_dcn 4 --num_dcn_layers 1 --dcn_cat_sab True \
+--modify_dcn_lr True \
+--batch_size 32 \
+--max_iter 60000 --stepvalues 30000 50000 --gamma 0.1 --lr 0.001 \
+--gt_pixel_jitter 0.0 --num_workers 2 --speedrun 4999 \
+--ohnm_neg_ratio 3 \
+--cross_validation 1 \
+--use_07_metric False --confidence_threshold 0.2 \
+--ap_list "0.3,0.5,0.7" --iobb_list "0.3,0.5,0.7" \
+--model_name GSSD_plusplus
+```
+
 ## Performance
 
 GSSD++ and PixelLink++ exhibit state-of-the-art detection results measured by IoU and IoBB under various overlap thresholds. Our models also provide robustness to registration mismatch of the multi-phase data using the attention-guided multi-phase alignment module.
